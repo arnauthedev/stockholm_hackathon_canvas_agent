@@ -101,10 +101,10 @@ app.post("/api/chat", async (c) => {
   return c.json({ session_id, status: "started" });
 });
 
-// Which realtime provider the phone should connect to (routes.voice): openai → WebRTC via
-// POST /api/voice/session; google → audio over the /voice WebSocket (camera frames allowed).
+// Which realtime provider the phone should connect to (routes.voice, or routes.liveVision with ?mode=vision):
+// openai → WebRTC via POST /api/voice/session; google → audio over the /voice WebSocket (camera frames allowed).
 app.get("/api/voice/provider", (c) => {
-  const v = route("voice");
+  const v = route(c.req.query("mode") === "vision" ? "liveVision" : "voice");
   const key = v.provider === "google" ? env.GEMINI_API_KEY : env.OPENAI_API_KEY;
   return c.json({ provider: v.provider, model: v.model, video: v.provider === "google", ready: !!key });
 });

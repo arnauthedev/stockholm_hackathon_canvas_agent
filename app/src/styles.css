@@ -57,7 +57,7 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
 /* Bottom bar */
 .bottombar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-  height: calc(var(--bar-h) + var(--safe-bottom)); padding: 0 28px var(--safe-bottom);
+  height: calc(var(--bar-h) + var(--safe-bottom)); padding: 0 20px var(--safe-bottom);
   display: flex; align-items: center; justify-content: space-between;
   background: linear-gradient(to top, var(--bg) 60%, transparent);
 }
@@ -66,7 +66,10 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
   background: var(--surface); display: grid; place-items: center; box-shadow: 0 1px 3px rgb(0 0 0 / .08);
 }
 .side-btn.on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
-/* Live camera during a Gemini call: small preview above the bar, frames go to the voice session */
+.side-btn.vision.live { background: var(--danger); color: #fff; border-color: transparent; }
+.side-btn.vision.connecting { opacity: .6; }
+.side-btn.vision.error { background: var(--warn); }
+/* Live vision call: small camera preview above the bar, frames go to the Gemini session */
 .camera {
   position: fixed; z-index: 9; right: 12px; bottom: calc(var(--bar-h) + var(--safe-bottom) + 12px);
   width: 120px; height: 160px; border-radius: 14px; overflow: hidden; background: #000;

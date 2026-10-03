@@ -33,7 +33,7 @@ Step 4 is needed because iOS gives Home Screen apps their own storage: the token
 
 ### Good to know
 
-- The realtime conversation uses OpenAI (`ROUTE_voice=openai/gpt-live-1` in `.env`). Remove that line to go back to the code default, Gemini Live.
+- Bottom bar: **Text** · **Talk** · **Live vision** (video camera) · **Photo**. Talk uses OpenAI (`ROUTE_voice=openai/gpt-live-1` in `.env`; remove the line for the code default, Gemini Live). Live vision is a separate call that always uses Gemini Live with the camera streaming, so it can see what you point the phone at (`ROUTE_liveVision`). One call runs at a time: starting one ends the other, and closing the camera ends Live vision.
 - New app versions reach the phone on their own. A changed URL does not: the Home Screen app is tied to its URL.
 - The URL is a free Cloudflare quick tunnel. It survives deploys and changes only when the serve loop restarts (a Matrix reboot). For a URL that never changes, use a Cloudflare tunnel on your own domain (see [deploy/matrix.md](deploy/matrix.md#limits)).
 - `.env` on Matrix is separate from the laptop's. After changing a key locally, upload it with `matrix upload .env projects/canvas-agent/.env --secret --force`, then run `bash scripts/matrix-deploy.sh`.

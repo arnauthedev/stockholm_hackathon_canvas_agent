@@ -12,32 +12,40 @@ import { pairWith, token } from "./lib/api.ts";
 import { connectBus } from "./lib/bus.ts";
 import { useStore } from "./lib/store.ts";
 import { applyTheme } from "./lib/theme.ts";
-import { PhoneVoice } from "./lib/voice.ts";
+import { PhoneVoice, type CallMode } from "./lib/voice.ts";
 
 export function App() {
   const theme = useStore((s) => s.theme);
   const connected = useStore((s) => s.connected);
   const screens = useStore((s) => s.screens);
-  const [talk, setTalk] = useState<TalkState>("idle");
+  // One call at a time: `call` is its state, `mode` which button started it (Talk or Live vision).
+  const [call, setCall] = useState<TalkState>("idle");
+  const [mode, setMode] = useState<CallMode>("voice");
   const voice = useRef<PhoneVoice | null>(null);
   const transcript = useStore((s) => s.transcript);
 
-  const onTalk = () => {
+  const phoneVoice = () => {
     if (!voice.current) {
-      voice.current = new PhoneVoice();
-      voice.current.onState = (s, err) => {
-        setTalk(s);
+      const v = new PhoneVoice();
+      v.onState = (s, err) => {
+        setCall(s);
         const live = s === "live";
-        useStore.getState().set({ voiceLive: live, voiceVideo: live && !!voice.current?.video, ...(live ? { trayOpen: false, lastTalkAt: Date.now() } : { cameraOpen: false }) });
-        if (err) useStore.getState().toast({ text: `Voice: ${err}`, kind: "error" });
+        // Live vision opens the camera as soon as the call is up; any call ending closes it.
+        useStore.getState().set({ voiceLive: live, voiceVideo: live && v.video, ...(live ? { trayOpen: false, lastTalkAt: Date.now(), cameraOpen: v.mode === "vision" } : { cameraOpen: false }) });
+        if (err) useStore.getState().toast({ text: `${v.mode === "vision" ? "Live vision" : "Voice"}: ${err}`, kind: "error" });
       };
+      voice.current = v;
     }
-    const v = voice.current;
-    if (talk === "idle" || talk === "error") return void v.start();
-    if (talk === "connecting") return void v.stop();
-    // live: if the agent is mid-sentence, interrupt; otherwise end the session
+    return voice.current;
+  };
+  const onCall = (m: CallMode) => {
+    const v = phoneVoice();
+    if (call === "idle" || call === "error") return (setMode(m), void v.start(m));
+    if (mode !== m) return (setMode(m), void v.stop().then(() => v.start(m))); // switch Talk ↔ Live vision
+    if (call === "connecting") return void v.stop();
+    // live Talk: if the agent is mid-sentence, interrupt; otherwise end the session
     const last = transcript[transcript.length - 1];
-    if (last?.role === "agent" && !last.final) v.interrupt();
+    if (m === "voice" && last?.role === "agent" && !last.final) v.interrupt();
     else void v.stop();
   };
   const [textOpen, setTextOpen] = useState(false);
@@ -45,7 +53,8 @@ export function App() {
   const voiceVideo = useStore((s) => s.voiceVideo);
   const cameraOpen = useStore((s) => s.cameraOpen);
   const sendFrame = useCallback((jpeg: string) => voice.current?.sendFrame(jpeg), []);
-  const closeCamera = useCallback(() => useStore.getState().set({ cameraOpen: false }), []);
+  // The camera is the point of a Live vision call: closing it ends the call.
+  const closeCamera = useCallback(() => (voice.current?.mode === "vision" ? void voice.current.stop() : useStore.getState().set({ cameraOpen: false })), []);
 
   useEffect(() => {
     if (token) connectBus();
@@ -90,11 +99,12 @@ export function App() {
       <LinkPrompt />
       {cameraOpen && voiceVideo && <CameraPanel send={sendFrame} onClose={closeCamera} />}
       <BottomBar
-        talk={talk}
-        onTalk={onTalk}
+        talk={mode === "voice" ? call : "idle"}
+        onTalk={() => onCall("voice")}
+        vision={mode === "vision" ? call : "idle"}
+        onVision={() => onCall("vision")}
         onText={() => setTextOpen(true)}
         onImage={setPhoto}
-        camera={talk === "live" && voiceVideo ? { open: cameraOpen, onToggle: () => useStore.getState().set({ cameraOpen: !cameraOpen }) } : null}
       />
       <TextSheet open={textOpen} onClose={() => setTextOpen(false)} />
       <PhotoSheet file={photo} onClose={() => setPhoto(null)} />

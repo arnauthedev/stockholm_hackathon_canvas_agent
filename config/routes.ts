@@ -11,9 +11,15 @@
  *           the model holds the tools itself. Needs GEMINI_API_KEY.
  *   e.g. ROUTE_voice=google/gemini-3.8-live   ROUTE_voice=google/gemini-3.8-live-extended-thinking@low
  * `voice` names the spoken voice per provider.
+ *
+ * Live vision (`liveVision`): the realtime call started from the video-camera button. It streams the camera
+ * with the audio, so it needs a provider that takes video: google only. Independent of `voice`, so Talk
+ * can stay on OpenAI.   e.g. ROUTE_liveVision=google/gemini-3.8-live-extended-thinking@low
+ * (Not `vision`: that row is the model that reads photos.)
  */
 export const routes = {
   voice: { provider: "google", model: "gemini-3.8-live", voice: { openai: "marin", google: "Kore" }, enabled: true }, // openai: gpt-live-1
+  liveVision: { provider: "google", model: "gemini-3.8-live", voice: { openai: "marin", google: "Kore" }, enabled: true },
   voiceFallback: { provider: "openai", session: "realtime", model: "gpt-realtime-2.1", voice: "marin", enabled: true },
   brain: { provider: "openai", model: "gpt-6-luna", reasoning: "minimal", voiceReasoning: "minimal", tools: ["web_search"], enabled: true },
   subagent: { provider: "openai", model: "gpt-6-luna", reasoning: "minimal", tools: ["web_search"], enabled: true },

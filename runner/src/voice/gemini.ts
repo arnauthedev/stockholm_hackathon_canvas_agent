@@ -40,6 +40,11 @@ const NO_BARGE_IN = process.env.VOICE_NO_BARGE_IN === "1";
 const PHONE_LAG = 300; // ms from sending a chunk to the phone starting to play it (tunnel + its playback lead)
 const BYTES_PER_MS = 48; // PCM16 mono 24 kHz
 
+const VISION_NOTE = `
+
+## Live vision
+The user started this call from the camera button: the phone streams its rear camera to you, about one frame a second, for the whole call. When they ask about what they are showing, describe or act on what is in the latest frames, and say so if the image is too dark or blurry to tell.`;
+
 let _ai: GoogleGenAI | null = null;
 const ai = () => (_ai ??= new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }));
 
@@ -54,15 +59,17 @@ export function attachVoiceRelay(server: Server) {
       socket.destroy();
     };
     if (url.searchParams.get("token") !== env.RUNNER_TOKEN) return refuse(401, "Unauthorized");
-    if (route("voice").provider !== "google") return refuse(409, "Conflict: voice provider is not google");
+    // ?mode=vision: the Live vision button (routes.liveVision, camera on from the start); otherwise Talk (routes.voice)
+    const vision = url.searchParams.get("mode") === "vision";
+    const cfg = route(vision ? "liveVision" : "voice");
+    if (cfg.provider !== "google") return refuse(409, `Conflict: ${vision ? "liveVision" : "voice"} provider is not google`);
     if (!env.GEMINI_API_KEY) return refuse(503, "Service Unavailable: GEMINI_API_KEY is not set in .env");
-    wss.handleUpgrade(req, socket, head, (ws) => void createGeminiSession(ws));
+    wss.handleUpgrade(req, socket, head, (ws) => void createGeminiSession(ws, cfg, vision));
   });
 }
 
-async function createGeminiSession(phone: WebSocket) {
-  const voice = route("voice");
-  const s = new GeminiLiveSession(`gem_${randomBytes(6).toString("hex")}`, phone, voice);
+async function createGeminiSession(phone: WebSocket, cfg: Route, vision: boolean) {
+  const s = new GeminiLiveSession(`gem_${randomBytes(6).toString("hex")}`, phone, cfg, vision);
   try {
     await s.connect({ tools: [], instructions: "", context: {} as never });
   } catch (err) {
@@ -125,6 +132,7 @@ class GeminiLiveSession extends VoiceCore {
     id: string,
     private readonly phone: WebSocket,
     private readonly cfg: Route,
+    private readonly vision = false,
   ) {
     super(id, "google");
     this.extended = cfg.model.includes("extended-thinking");
@@ -135,7 +143,7 @@ class GeminiLiveSession extends VoiceCore {
     const declarations = [...toolDefs(TOOL_NAMES), ...helperDefs()].map((d) => fnDecl(d, behavior));
     this.config = {
       responseModalities: [Modality.AUDIO],
-      systemInstruction: { parts: [{ text: await geminiInstructions() }] },
+      systemInstruction: { parts: [{ text: (await geminiInstructions()) + (this.vision ? VISION_NOTE : "") }] },
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceNameFor(this.cfg, "google") } } },
       tools: [{ googleSearch: {} }, { functionDeclarations: declarations }],
       inputAudioTranscription: {},
@@ -154,8 +162,8 @@ class GeminiLiveSession extends VoiceCore {
     await this.open(); // resolves after Gemini's setup handshake
     this.attach({ model: this.cfg.model });
     this.toPhone({ type: "ready", session_id: this.id });
-    record({ kind: "voice", title: "voice session started", detail: `${this.cfg.model} · tools in the voice model`, ok: true, actor: this.id });
-    console.log(`[voice] gemini ${this.id} ready (${this.cfg.model})`);
+    record({ kind: "voice", title: this.vision ? "live vision session started" : "voice session started", detail: `${this.cfg.model} · tools in the voice model`, ok: true, actor: this.id });
+    console.log(`[voice] gemini ${this.id} ready (${this.cfg.model}${this.vision ? ", live vision" : ""})`);
   }
 
   private async open(handle?: string) {

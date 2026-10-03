@@ -1,9 +1,12 @@
 import { api, token } from "./api.ts";
 
 export type VoiceState = "connecting" | "live" | "idle" | "error";
+/** voice: the Talk button (routes.voice). vision: the Live vision button (routes.liveVision, Gemini, camera on). */
+export type CallMode = "voice" | "vision";
 
 /**
- * Phone half of a voice call (B9). The runner's `voice` route picks the provider:
+ * Phone half of a voice call (B9). The runner's `voice` route picks the provider (`liveVision` for a Live
+ * vision call, always one that takes video):
  * - openai: mic → WebRTC → OpenAI (GPT-Live); the runner holds the sideband.
  * - google: mic → PCM over the runner's /voice WebSocket → Gemini Live; agent audio comes back the
  *   same way, and camera frames can go up while the camera is open.
@@ -13,20 +16,23 @@ export class PhoneVoice {
   private impl: WebRtcVoice | RelayVoice | null = null;
   /** The provider accepts camera frames (set once the call is live). */
   video = false;
+  /** Which button started the current (or last) call. */
+  mode: CallMode = "voice";
   onState: (s: VoiceState, err?: string) => void = () => {};
 
   get sessionId() {
     return this.impl?.sessionId ?? null;
   }
 
-  async start() {
+  async start(mode: CallMode = "voice") {
+    this.mode = mode;
     this.onState("connecting");
     // Created inside the tap's task so iOS lets it play later (the provider lookup below is async).
     const ctx = new AudioContext();
     void ctx.resume().catch(() => {});
     let p: { provider: string; model: string; video: boolean; ready: boolean };
     try {
-      p = await api("/api/voice/provider");
+      p = await api(`/api/voice/provider${mode === "vision" ? "?mode=vision" : ""}`);
     } catch (err) {
       void ctx.close();
       return this.onState("error", err instanceof Error ? err.message : String(err));
@@ -35,10 +41,15 @@ export class PhoneVoice {
       void ctx.close();
       return this.onState("error", `${p.provider === "google" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"} is not set in .env`);
     }
+    if (mode === "vision" && !p.video) {
+      void ctx.close();
+      return this.onState("error", `Live vision needs a provider that takes video (ROUTE_liveVision is ${p.provider})`);
+    }
     this.video = p.video;
-    const impl = p.provider === "google" ? new RelayVoice(ctx) : (void ctx.close(), new WebRtcVoice());
+    const impl = p.provider === "google" ? new RelayVoice(ctx, mode) : (void ctx.close(), new WebRtcVoice());
     this.impl = impl;
     impl.onState = (s, err) => {
+      if (this.impl !== impl) return; // a call we already left (stop() cleans up ~400 ms later)
       if (s === "idle" || s === "error") {
         this.impl = null;
         this.video = false;
@@ -52,8 +63,14 @@ export class PhoneVoice {
     this.impl?.interrupt();
   }
 
+  /** Ends the call and reports idle right away, so another call can start without waiting for cleanup. */
   async stop() {
-    await this.impl?.stop();
+    const impl = this.impl;
+    if (!impl) return;
+    this.impl = null;
+    this.video = false;
+    await impl.stop();
+    this.onState("idle");
   }
 
   /** A camera frame (base64 JPEG) for providers that take video. */
@@ -232,7 +249,10 @@ class RelayVoice {
   sessionId: string | null = null;
   onState: (s: VoiceState, err?: string) => void = () => {};
 
-  constructor(private readonly ctx: AudioContext) {
+  constructor(
+    private readonly ctx: AudioContext,
+    private readonly mode: CallMode = "voice",
+  ) {
     this.out = ctx.destination;
   }
 
@@ -253,9 +273,10 @@ class RelayVoice {
         this.ctx.audioWorklet.addModule("/pcm-worklet.js"),
         this.setupOutput(),
       ]);
+      if (this.done) return void mic.getTracks().forEach((t) => t.stop()); // stopped while connecting
       this.mic = mic;
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      const ws = new WebSocket(`${proto}://${location.host}/voice?token=${encodeURIComponent(token)}`);
+      const ws = new WebSocket(`${proto}://${location.host}/voice?token=${encodeURIComponent(token)}${this.mode === "vision" ? "&mode=vision" : ""}`);
       ws.binaryType = "arraybuffer";
       this.ws = ws;
       await new Promise<void>((resolve, reject) => {
@@ -263,6 +284,7 @@ class RelayVoice {
         ws.onerror = () => reject(new Error("voice socket failed"));
         ws.onclose = (e) => reject(new Error(e.reason || `voice socket closed (${e.code})`));
       });
+      if (this.done) return void ws.close();
       ws.onerror = null;
       ws.onclose = () => this.cleanup("idle");
       ws.onmessage = (m) => (m.data instanceof ArrayBuffer ? this.play(m.data) : this.onControl(String(m.data)));
