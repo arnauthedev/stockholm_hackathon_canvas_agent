@@ -698,6 +698,36 @@ export default [
     },
   },
 
+  {
+    name: "ui: reset demo — two demo widgets side by side, pictures load, checklist taps",
+    tags: ["ui"],
+    async run({ home }) {
+      const r = await api("/api/reset-demo", { method: "POST" });
+      const p = await phone();
+      try {
+        const { page } = p;
+        await page.waitForSelector(".widget iframe", { timeout: 8000 });
+        await sleep(1500);
+        const apps = await listApps(home);
+        const frames = page.frames().filter((f) => f !== page.mainFrame());
+        let imgs = 0;
+        for (const f of frames) imgs += await f.evaluate(() => [...document.images].filter((i) => i.complete && i.naturalWidth > 0).length).catch(() => 0);
+        let tapped = false;
+        for (const f of frames) {
+          const li = f.locator("li").nth(2);
+          if (await li.count()) { await li.click(); tapped = (await li.getAttribute("class")) === "on"; }
+        }
+        if (process.env.E2E_SHOTS) await page.screenshot({ path: process.env.E2E_SHOTS + "/demo.png" });
+        const boxes = await page.locator(".widget").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((b) => [Math.round(b.x), Math.round(b.y)]));
+        const sideBySide = boxes.length === 2 && boxes[0][1] === boxes[1][1] && boxes[0][0] !== boxes[1][0];
+        const ok = r.ok && apps.sort().join() === "leg-day,sneaker-watch" && imgs === 2 && tapped && sideBySide && !p.errors.length;
+        return { pass: ok, info: `apps=${apps} imgs=${imgs} tapped=${tapped} sideBySide=${sideBySide} boxes=${JSON.stringify(boxes)} errors=${p.errors.length}` };
+      } finally {
+        await p.close();
+      }
+    },
+  },
+
   // ---------------- voice (slowest; real GPT-Live) ----------------
   {
     name: "voice: pull down on home starts Talk; the canvas fades in when the agent answers",

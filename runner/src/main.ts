@@ -21,6 +21,7 @@ import { listJobs } from "./jobs.ts";
 import { listTextSessions } from "./brain.ts";
 import { pendingApprovals } from "./approvals.ts";
 import { route } from "../../config/routes.ts";
+import { resetDemo } from "./demo.ts";
 import { resetState } from "./reset.ts";
 import { addSubscription, pushAll, removeSubscription, subscriptionCount, vapidPublicKey } from "./push.ts";
 import { runAppNow } from "./jobs.ts";
@@ -211,6 +212,8 @@ app.post("/api/apps/:id/refresh", async (c) => c.json(await runAppNow(c.req.para
 
 // Reset runtime state (backup kept in agent-home/.backups/).
 app.post("/api/reset", async (c) => c.json(await resetState()));
+// Same, then the two demo widgets (workout + sneaker watch) on the first screen.
+app.post("/api/reset-demo", async (c) => c.json(await resetDemo()));
 
 app.post("/api/canvas/:id/show", async (c) => c.json(await showCanvas(c.req.param("id"))));
 

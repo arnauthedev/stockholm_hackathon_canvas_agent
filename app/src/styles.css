@@ -53,6 +53,7 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
 .setting + .setting { border-top: 1px solid var(--border); }
 .setting-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
 .setting-row > :last-child { flex-shrink: 0; white-space: nowrap; }
+.setting-actions { display: flex; gap: 8px; }
 .setting-label { font-weight: 600; }
 .setting-label small { display: block; font-weight: 400; font-size: 14px; color: var(--muted); margin-top: 2px; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: var(--surface2); }

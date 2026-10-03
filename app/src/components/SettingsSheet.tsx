@@ -74,26 +74,29 @@ export function SettingsSheet({ onClose }: { onClose(): void }) {
 }
 
 function ResetSetting() {
-  const [busy, setBusy] = useState(false);
-  const reset = async () => {
-    if (!confirm("Reset everything? Canvases, pinned widgets, tasks and conversations are cleared (a backup is kept on the computer). Your profile and themes stay.")) return;
-    setBusy(true);
+  const [busy, setBusy] = useState<"reset" | "demo" | null>(null);
+  const reset = async (demo: boolean) => {
+    if (!confirm(`Reset everything${demo ? " and add the demo widgets" : ""}? Canvases, pinned widgets, tasks and conversations are cleared (a backup is kept on the computer). Your profile and themes stay.`)) return;
+    setBusy(demo ? "demo" : "reset");
     try {
-      await api("/api/reset", { method: "POST" });
-      useStore.getState().toast({ text: "Fresh start", kind: "success" });
+      await api(demo ? "/api/reset-demo" : "/api/reset", { method: "POST" });
+      useStore.getState().toast({ text: demo ? "Demo ready" : "Fresh start", kind: "success" });
     } catch (e) {
       useStore.getState().toast({ text: String(e instanceof Error ? e.message : e), kind: "error" });
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
   return (
     <div className="setting setting-row">
       <div className="setting-label">
         Reset
-        <small>Clears canvases, widgets, tasks and conversations.</small>
+        <small>Clears canvases, widgets, tasks and conversations. Reset demo adds the demo widgets after.</small>
       </div>
-      <button className="btn danger" disabled={busy} onClick={() => void reset()}>{busy ? "Resetting…" : "Reset"}</button>
+      <div className="setting-actions">
+        <button className="btn" disabled={!!busy} onClick={() => void reset(true)}>{busy === "demo" ? "Resetting…" : "Reset demo"}</button>
+        <button className="btn danger" disabled={!!busy} onClick={() => void reset(false)}>{busy === "reset" ? "Resetting…" : "Reset"}</button>
+      </div>
     </div>
   );
 }
