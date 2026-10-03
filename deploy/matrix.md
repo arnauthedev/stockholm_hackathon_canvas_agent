@@ -69,6 +69,7 @@ bash scripts/matrix-deploy.sh            # or: bash scripts/matrix-deploy.sh <br
 It pushes the branch, then on Matrix pulls it, runs `pnpm install`, rebuilds the app and restarts the runner (starting the serve loop if it isn't running). The tunnel URL does not change, the phone picks up the new app on its next load, and live widgets resume their cron jobs.
 
 - `.env` changes: edit `~/projects/canvas-agent/.env` on Matrix (or re-upload with `--force`), then redeploy. The runner re-reads `.env` on every restart.
+- Current URL, health check and pairing QR: `bash scripts/matrix-pair.sh`.
 - Logs: `matrix run -C projects/canvas-agent -- tail -50 logs/serve.log`.
 - Stop: `matrix run -C projects/canvas-agent -- bash -lc 'kill $(cat logs/serve.pid)'`.
 - The laptop and Matrix are separate instances with separate `agent-home/`, pairing and push keys. Avoid running both with the same API keys if you don't want widgets to poll twice.
