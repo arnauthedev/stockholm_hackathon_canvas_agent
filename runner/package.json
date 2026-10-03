@@ -1,0 +1,36 @@
+{
+  "name": "@canvas-agent/runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false --include ../.env --include '../config/**' --exclude '../agent-home/**' src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.83",
+    "@canvas-agent/contract": "workspace:*",
+    "@hono/node-server": "^2.0.0",
+    "ai": "^7.0.126",
+    "chokidar": "^5.0.0",
+    "hono": "^4.13.0",
+    "imapflow": "^2.2.1",
+    "mailparser": "^3.9.33",
+    "node-cron": "^4.2.0",
+    "nodemailer": "^10.0.13",
+    "openai": "^7.25.0",
+    "web-push": "^3.6.7",
+    "ws": "^8.20.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.9.0",
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/web-push": "^3.6.4",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.0"
+  }
+}

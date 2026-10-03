@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Mark",
+    "relation": "friend",
+    "phones": [{ "label": "mobile", "number": "+34 600 000 001" }],
+    "emails": [{ "address": "mark@example.com" }],
+    "notes": "Lent you €5."
+  },
+  {
+    "name": "Laura",
+    "relation": "friend",
+    "emails": [{ "address": "laura@example.com" }],
+    "notes": "Often emails about weekend plans."
+  },
+  {
+    "name": "Mom",
+    "aliases": ["Mum", "Mother"],
+    "relation": "family",
+    "phones": [{ "label": "mobile", "number": "+34 600 000 003" }]
+  }
+]

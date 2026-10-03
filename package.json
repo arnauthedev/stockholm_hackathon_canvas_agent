@@ -1,0 +1,26 @@
+{
+  "name": "canvas-agent",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "app",
+    "runner",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "bootstrap": "bash scripts/bootstrap.sh",
+    "dev": "bash scripts/dev.sh",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm --filter app build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "playwright-core": "^1.63.0",
+    "qrcode-terminal": "^0.12.0",
+    "typescript": "^6.0.0"
+  },
+  "packageManager": "pnpm@10.15.0"
+}

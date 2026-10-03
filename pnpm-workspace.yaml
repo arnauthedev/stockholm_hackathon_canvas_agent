@@ -1,0 +1,9 @@
+packages:
+  - app
+  - runner
+  - packages/*
+autoInstallPeers: true
+strictPeerDependencies: false
+linkWorkspacePackages: true
+onlyBuiltDependencies:
+  - esbuild

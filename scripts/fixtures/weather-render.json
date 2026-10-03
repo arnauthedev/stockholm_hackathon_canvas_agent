@@ -1,0 +1,21 @@
+{
+  "title": "Lisbon, next 7 days",
+  "spec": {
+    "title": "Lisbon, next 7 days",
+    "root": "col",
+    "components": {
+      "col": { "type": "Column", "children": ["h", "sub", "chart"] },
+      "h": { "type": "Heading", "props": { "text": "Lisbon, next 7 days" } },
+      "sub": { "type": "Text", "props": { "text": { "$bind": "/summary" }, "muted": true } },
+      "chart": { "type": "Chart", "props": { "kind": "line", "x": { "$bind": "/days" }, "series": { "$bind": "/series" }, "yUnit": "°C" } }
+    }
+  },
+  "data": {
+    "summary": "Warm and dry, cooling at the weekend.",
+    "days": ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"],
+    "series": [
+      { "name": "Max", "values": [27, 28, 26, 24, 23, 24, 25] },
+      { "name": "Min", "values": [17, 18, 17, 15, 14, 15, 16] }
+    ]
+  }
+}

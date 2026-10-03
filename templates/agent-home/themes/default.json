@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "default",
+  "colors": {
+    "bg": "#f6f6f4", "surface": "#ffffff", "surface2": "#efefec", "text": "#121212", "muted": "#5f6368",
+    "accent": "#1a56db", "accentText": "#ffffff", "border": "#dcdcd7",
+    "success": "#137333", "warn": "#b06000", "danger": "#c5221f",
+    "chart": ["#1a56db", "#e8710a", "#188038", "#a142f4", "#d01884"]
+  },
+  "dark": {
+    "bg": "#0e0f11", "surface": "#1a1b1e", "surface2": "#24262a", "text": "#f2f2f0", "muted": "#a0a4aa",
+    "accent": "#6d9bff", "accentText": "#0b1020", "border": "#33363b",
+    "success": "#5bb974", "warn": "#fbbc04", "danger": "#f28b82",
+    "chart": ["#6d9bff", "#fcad70", "#81c995", "#d7aefb", "#ff8bcb"]
+  },
+  "radius": 16,
+  "font": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif",
+  "spacing": 16
+}

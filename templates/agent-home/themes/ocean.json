@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "ocean",
+  "colors": {
+    "bg": "#eaf4f7", "surface": "#ffffff", "surface2": "#d9ecf1", "text": "#0b2530", "muted": "#4d6b75",
+    "accent": "#00838f", "accentText": "#ffffff", "border": "#bcd9e0",
+    "success": "#2e7d32", "warn": "#ef6c00", "danger": "#c62828",
+    "chart": ["#00838f", "#ff7043", "#5c6bc0", "#7cb342", "#ab47bc"]
+  },
+  "dark": {
+    "bg": "#06171c", "surface": "#0d2730", "surface2": "#12333d", "text": "#e3f4f7", "muted": "#8fb3bd",
+    "accent": "#4dd0e1", "accentText": "#06171c", "border": "#1d4652",
+    "chart": ["#4dd0e1", "#ffab91", "#9fa8da", "#c5e1a5", "#ce93d8"]
+  },
+  "radius": 22,
+  "font": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif",
+  "spacing": 16
+}
