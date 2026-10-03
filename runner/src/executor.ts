@@ -90,17 +90,18 @@ const handlers: { [N in ToolName]: Handler<N> } = {
       return { canvas_id: out.canvas_id, status: "drawing", note: "The card is on the screen; the picture fades in within a few seconds." };
     }
     const id = await resolveTarget(a.target);
-    const data = ((await readJson(path.join(targetDir(id), "data.json"))) ?? {}) as ImageData;
-    if (data.aspect === undefined) return { error: `"${id}" is not an image card (make one with generate_image without target)` };
+    const k = imageKeys(a.field);
+    const data = ((await readJson(path.join(targetDir(id), "data.json"))) ?? {}) as Record<string, unknown>;
+    if (!a.field && data.aspect === undefined) return { error: `"${id}" is not an image card (make one with generate_image without target, or pass field for a Custom card)` };
     if (a.revert) {
-      const [prev, ...rest] = data.history ?? [];
+      const [prev, ...rest] = (data[k.history] as string[] | undefined) ?? [];
       if (!prev) return { error: "no earlier picture to go back to" };
-      await handlers.update_data({ target: id, patch: { src: prev, history: rest } }, ctx);
+      await handlers.update_data({ target: id, patch: { [k.src]: prev, [k.history]: rest } }, ctx);
       return { ok: true, target: id, note: "The previous picture is fading back in." };
     }
     if (!a.prompt) return { error: "prompt required: what to change, or what to draw with fresh" };
-    await handlers.update_data({ target: id, patch: { drawing: true } }, ctx);
-    void drawImage(id, { prompt: a.prompt, fresh: !!a.fresh || !imageName(data.src) }, ctx);
+    await handlers.update_data({ target: id, patch: { [k.drawing]: true, ...(a.field && a.aspect ? { [k.aspect]: a.aspect } : {}) } }, ctx);
+    void drawImage(id, { prompt: a.prompt, fresh: !!a.fresh || !imageName(data[k.src]), field: a.field }, ctx);
     return { ok: true, target: id, status: "drawing", note: "The picture changes in place within a few seconds (a fade)." };
   },
 
@@ -476,36 +477,44 @@ export async function executeTool(name: string, rawArgs: unknown, ctx: ToolCtx =
 export const sideEffectsEnabled = () => env.ENABLE_SIDE_EFFECTS;
 export type { CanvasSpec };
 
-type ImageData = { src?: string; prompt?: string; aspect?: string; drawing?: boolean; history?: string[] };
+/** Data keys of one picture: an image card uses src/prompt/…; a Custom card names a field (img → img, img_prompt, …). */
+function imageKeys(field?: string) {
+  const f = field ? `${field}_` : "";
+  return { src: field ?? "src", prompt: `${f}prompt`, aspect: `${f}aspect`, drawing: field ? `${f}drawing` : "drawing", history: `${f}history` };
+}
 
 /**
  * Background half of generate_image: one picture at a time per card, each edit starting from the latest
  * picture (so "darker" then "add a hat" stack). The card's data gets the new src and the old one goes to
  * history (last 10, for revert).
  */
-async function drawImage(id: string, job: { prompt: string; fresh: boolean }, ctx: ToolCtx) {
+async function drawImage(id: string, job: { prompt: string; fresh: boolean; field?: string }, ctx: ToolCtx) {
+  const k = imageKeys(job.field);
   await lock(`image:${id}`, async () => {
     const file = path.join(targetDir(id), "data.json");
-    const data = ((await readJson(file)) ?? {}) as ImageData;
+    const data = ((await readJson(file)) ?? {}) as Record<string, unknown>;
+    const src = typeof data[k.src] === "string" ? (data[k.src] as string) : "";
+    const oldPrompt = typeof data[k.prompt] === "string" ? (data[k.prompt] as string) : "";
+    const history = (data[k.history] as string[] | undefined) ?? [];
     const t0 = Date.now();
     try {
-      const from = job.fresh ? undefined : imageName(data.src);
-      const name = await makeImage(job.fresh ? job.prompt : `Edit this picture: ${job.prompt}. Keep everything else the same.`, data.aspect ?? "1:1", from);
-      const history = data.src ? [data.src, ...(data.history ?? [])].slice(0, 10) : (data.history ?? []);
-      const prompt = job.fresh || !data.prompt ? job.prompt : `${data.prompt} · ${job.prompt}`.slice(-400);
-      const patch = { src: imageUrl(name), prompt, drawing: false, history };
+      const from = job.fresh ? undefined : imageName(src);
+      const name = await makeImage(job.fresh ? job.prompt : `Edit this picture: ${job.prompt}. Keep everything else the same.`, String(data[k.aspect] ?? "1:1"), from);
+      const prompt = job.fresh || !oldPrompt ? job.prompt : `${oldPrompt} · ${job.prompt}`.slice(-400);
+      const patch = { [k.src]: imageUrl(name), [k.prompt]: prompt, [k.drawing]: false, [k.history]: src ? [src, ...history].slice(0, 10) : history };
       await handlers.update_data({ target: id, patch }, ctx);
       // pinned while this first picture was still being drawn: the widget copied the empty card, so it gets it too
       if (isCanvasId(id)) {
         for (const appId of await listAppIds()) {
           const app = await readApp(appId);
-          if (app?.app.from_canvas === id && (app.data as ImageData | undefined)?.drawing && !imageName((app.data as ImageData).src)) await handlers.update_data({ target: appId, patch }, ctx);
+          const d = (app?.data ?? {}) as Record<string, unknown>;
+          if (app?.app.from_canvas === id && d[k.drawing] && !imageName(d[k.src])) await handlers.update_data({ target: appId, patch }, ctx);
         }
       }
       record({ kind: "tool", title: `image ${from ? "edited" : "drawn"}`, detail: job.prompt.slice(0, 80), ok: true, ms: Date.now() - t0, actor: ctx.actor });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      await handlers.update_data({ target: id, patch: { drawing: false } }, ctx).catch(() => {});
+      await handlers.update_data({ target: id, patch: { [k.drawing]: false } }, ctx).catch(() => {});
       bus.emit({ type: "toast", text: `Picture: ${msg.slice(0, 140)}`, kind: "error" });
       record({ kind: "tool", title: "image failed", detail: msg.slice(0, 160), ok: false, ms: Date.now() - t0, actor: ctx.actor });
     }

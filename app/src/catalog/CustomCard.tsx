@@ -5,12 +5,13 @@ import { useRenderCtx } from "./context.ts";
 /**
  * Custom card: a page a sub-agent wrote, run in a sandboxed iframe. `allow-scripts` without
  * `allow-same-origin` gives it an opaque origin (no token, storage or app DOM), and its CSP blocks the
- * network, so the data only arrives from us: inlined at start, then posted on every update (live widgets).
+ * network except this app's generated pictures (/files/images/), so the data only arrives from us: inlined at start, then posted on every update (live widgets).
  * It reports its height so the card fits its content on the canvas; in a pinned widget it is scaled
  * down to fit the slot when the page is taller.
  */
 const THEME_VARS = ["--bg", "--surface", "--surface2", "--text", "--muted", "--accent", "--accent-text", "--border", "--danger", "--success"];
-const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:";
+// Pictures may come only from this app's generated-image folder (generate_image with field); no other network.
+const csp = () => `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: ${location.origin}/files/images/; font-src data:; media-src data: blob:`;
 
 const json = (v: unknown) => JSON.stringify(v ?? {}).replace(/</g, "\\u003c"); // safe inside <script>
 
@@ -49,7 +50,7 @@ export function CustomCard({ html, data }: { html?: string; data: unknown }) {
   const doc = useMemo(() => {
     const css = getComputedStyle(document.documentElement);
     const vars = THEME_VARS.map((v) => `${v}:${css.getPropertyValue(v).trim()}`).join(";");
-    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}">
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp()}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>:root{${vars}}html,body{margin:0;background:transparent;color:var(--text);font:15px/1.4 -apple-system,system-ui,sans-serif}</style>
 ${runtime(first.current)}</head><body>${html ?? ""}</body></html>`;

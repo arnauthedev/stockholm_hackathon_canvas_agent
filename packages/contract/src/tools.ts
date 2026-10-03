@@ -55,8 +55,9 @@ export const ToolArgs = {
     target: z.string().optional().describe("canvas id or app id of an image card to change in place (the picture fades to the new one); omit for a new card"),
     fresh: z.boolean().optional().describe("with target: draw a new picture from the prompt instead of editing the current one (e.g. scheduled refreshes)"),
     revert: z.boolean().optional().describe("with target: go back to the previous picture ('undo that')"),
+    field: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/).optional().describe("with target: put the picture in this data key of a Custom card (e.g. 'img'); the page reads card.data.img"),
     title: z.string().optional().describe("short card title (new card)"),
-    aspect: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional().describe("new card: shape (default 1:1)"),
+    aspect: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional().describe("shape (default 1:1): new card, or the first picture in a Custom card field"),
   }),
   undo: z.object({}),
   create_tasks: z.object({
