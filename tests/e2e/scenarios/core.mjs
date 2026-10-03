@@ -470,11 +470,11 @@ export default [
         await page.waitForSelector(".sheet .c-approval-title");
         const ed = await tool("resolve_approval", { action: "edit", fields: { body: "Dinner at 9" } });
         await sleep(500);
-        const shown = await page.locator(".sheet .c-field-value").allTextContents();
+        const shown = await page.locator(".sheet .c-field input, .sheet .c-field textarea").evaluateAll((els) => els.map((e) => e.value));
         const priv = await tool("resolve_approval", { action: "edit", fields: { to: "x@y.z" } });
         await tool("resolve_approval", { action: "accept" });
-        await page.waitForSelector(".c-approval-commit", { timeout: 3000 });
-        await page.locator(".c-approval-commit .btn").tap();
+        await page.waitForSelector(".c-approval-actions.commit", { timeout: 3000 });
+        await page.locator(".c-approval-actions.commit .btn").tap();
         await sleep(6500);
         const stillPending = (await api("/api/state")).approvals.length;
         await tool("resolve_approval", { action: "reject" });
@@ -516,6 +516,34 @@ export default [
         await page.locator(".screen-top .chip").first().click();
         const ok = m1.size === "W" && m1.locked && m2.y === 4 && m2.x === 0 && m2.locked && !p.errors.length;
         return { pass: ok, info: `m1=${JSON.stringify(m1)} m2=${JSON.stringify(m2)} errors=${p.errors.length}` };
+      } finally {
+        await p.close();
+      }
+    },
+  },
+  {
+    name: "ui: approval card is editable at once, no duplicate text, ✕ left / ✓ right, edits are sent",
+    tags: ["ui"],
+    async run() {
+      const p = await phone();
+      try {
+        const { page } = p;
+        const sent = [];
+        page.on("websocket", (ws) => ws.on("framesent", (f) => { try { const e = JSON.parse(f.payload); if (e.type === "ui.event") sent.push(e); } catch {} }));
+        await page.reload();
+        await page.waitForSelector(".conn.ok");
+        await tool("ask_approval", { card: { title: "Email Mark?", body: "Sends from your email account as shown.", accept_label: "Send", fields: [{ name: "to", label: "To", value: "mark@example.com", editable: true }, { name: "subject", label: "Subject", value: "Dinner", editable: true }, { name: "body", label: "Message", value: "See you at 8", editable: true }] } });
+        await page.waitForSelector(".sheet textarea");
+        const modify = await page.locator(".sheet .btn", { hasText: "Modify" }).count();
+        const sheetText = await page.locator(".sheet").innerText();
+        const dup = (sheetText.match(/See you at 8/g) ?? []).length; // textarea values aren't in innerText: should be 0
+        const btns = await page.locator(".sheet .c-approval-actions .btn").allTextContents();
+        await page.locator(".sheet textarea").fill("See you at 9 instead");
+        await page.locator(".sheet .btn.accept").tap();
+        await sleep(600);
+        const ev = sent.find((e) => e.event.startsWith("approval."));
+        const ok = modify === 0 && dup === 0 && /Reject/.test(btns[0] ?? "") && /Send/.test(btns[btns.length - 1] ?? "") && ev?.event === "approval.modify" && ev.payload?.fields?.body === "See you at 9 instead";
+        return { pass: ok, info: `modifyBtn=${modify} dupText=${dup} buttons=${JSON.stringify(btns)} sent=${ev?.event} body="${ev?.payload?.fields?.body}"` };
       } finally {
         await p.close();
       }
@@ -668,7 +696,8 @@ export default [
         await sleep(300);
         const pillFirst = (await page.locator(".approval-pill").count()) === 1 && (await page.locator(".sheet .c-approval-title").count()) === 0;
         const opened = await waitFor(async () => (await page.locator(".sheet .c-approval-title").count()) > 0, { timeout: 25_000, label: "sheet opens" }).then(() => Date.now()).catch(() => null);
-        const lastTalk = Math.max(...p.events.filter((e) => e.type === "transcript").map((e) => e.t), modal.t);
+        // speech before the sheet opened (speech that starts after it opened doesn't count)
+        const lastTalk = Math.max(...p.events.filter((e) => e.type === "transcript" && (!opened || e.t <= opened)).map((e) => e.t), modal.t);
         await stopVoice(page);
         const ok = pillFirst && !!opened && opened - lastTalk >= 3000;
         return { pass: ok, info: `pillFirst=${pillFirst} opened=${!!opened} quietBeforeOpen=${opened ? opened - lastTalk : "-"}ms` };

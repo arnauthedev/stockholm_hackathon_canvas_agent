@@ -22,6 +22,7 @@ const ApprovalCardArg = z.object({
   body: z.string(),
   fields: z.array(ApprovalField).optional(),
   actions: z.array(z.enum(["accept", "modify", "reject"])).optional(),
+  accept_label: z.string().optional().describe("label of the ✓ button, e.g. Send, Book, Pay (default Accept)"),
 });
 
 export const ToolArgs = {
