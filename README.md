@@ -1,10 +1,40 @@
 # Canvas Agent
 
-A mobile PWA that is almost nothing on its own. It has an empty canvas, a Talk button, a Text button and a Camera button. An OpenAI voice/text **brain** talks with you and builds the interface through tool calls: it renders UI, pins widgets, runs tasks, and keeps widgets live.
+Your personal living canvas in your pocket. Tell it to search, show you and create anything. Pin what it created and track everything important to you.
 
 - Spec: [docs/SPEC.md](docs/SPEC.md) · Decisions: [docs/DECISIONS.md](docs/DECISIONS.md)
 - Run locally: [deploy/local.md](deploy/local.md)
 - Run on Matrix OS: [deploy/matrix.md](deploy/matrix.md) (setup, limits, troubleshooting)
+
+## Architecture
+
+**Runtime.** The voice session relays audio to Gemini Live, which holds the tools. Each tool call goes through the executor, which writes `agent-home/`, and the watcher pushes every change to the app over `/bus`. Slow work goes to sub-agents on OpenAI, which report back into the call.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/runtime-dark.png">
+  <img alt="Runtime architecture: web app, runner modules on port 18787, Gemini Live, OpenAI and external APIs, with the protocol or tool on each edge" src="assets/diagrams/runtime-light.png">
+</picture>
+
+**Request lifecycle.** One utterance with a screen change and a delegated email. Screen tools run in order, `create_tasks` runs at once, and the approval comes back later.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/lifecycle-dark.png">
+  <img alt="Sequence of one request across the web app, Gemini Live, the voice session, the executor and a sub-agent" src="assets/diagrams/lifecycle-light.png">
+</picture>
+
+**Deployment.** Everything runs on Matrix OS. Devices reach it through a Cloudflare quick tunnel, and keys and state never leave it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/deployment-dark.png">
+  <img alt="Deployment topology: iPhone, Mac notch app and browser connect through cloudflared to the runner on Matrix OS, which calls Gemini, OpenAI and external services; code arrives from GitHub" src="assets/diagrams/deployment-light.png">
+</picture>
+
+**State sync.** One file, one watcher, one bus: this is why the phone, the Mac and a browser always show the same thing.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/sync-dark.png">
+  <img alt="State sync: executor writes data.json, chokidar sees the change, the bus fans the app event out to every device, and taps come back as ui.action" src="assets/diagrams/sync-light.png">
+</picture>
 
 ## Mac notch app
 
@@ -56,4 +86,5 @@ config/routes.ts    provider routing table
 python/             venv deps + helpers for generated fetch scripts
 templates/agent-home/  seed for runtime data (agent-home/ is gitignored)
 scripts/            bootstrap, dev, tunnel, check-footprint
+assets/diagrams/    architecture diagrams used in this README (light and dark)
 ```
