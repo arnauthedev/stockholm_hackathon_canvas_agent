@@ -17,6 +17,9 @@ const json = (v: unknown) => JSON.stringify(v ?? {}).replace(/</g, "\\u003c"); /
 
 function runtime(data: unknown) {
   return `<script>(() => {
+  // the sandbox has no storage (opaque origin): reading localStorage would throw, so pages get an in-memory one
+  const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => void m.set(k, String(v)), removeItem: (k) => void m.delete(k), clear: () => m.clear(), key: (i) => [...m.keys()][i] ?? null, get length() { return m.size; } }; };
+  for (const k of ["localStorage", "sessionStorage"]) { try { Object.defineProperty(window, k, { value: mem(), configurable: true }); } catch {} }
   let data = ${json(data)};
   const subs = [];
   window.card = {
@@ -52,7 +55,7 @@ export function CustomCard({ html, data }: { html?: string; data: unknown }) {
     const vars = THEME_VARS.map((v) => `${v}:${css.getPropertyValue(v).trim()}`).join(";");
     return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp()}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>:root{${vars}}html,body{margin:0;background:transparent;color:var(--text);font:15px/1.4 -apple-system,system-ui,sans-serif}</style>
+<style>:root{${vars}}html,body{margin:0;background:transparent;color:var(--text);font:15px/1.4 -apple-system,system-ui,sans-serif;overflow-x:hidden}img,svg,video,canvas{max-width:100%}img{height:auto}</style>
 ${runtime(first.current)}</head><body>${html ?? ""}</body></html>`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, theme]);

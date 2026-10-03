@@ -157,6 +157,10 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
 .c-img { width: 100%; max-height: 60vh; border-radius: var(--radius); display: block; background: var(--surface2); }
 /* Image cards: crossfade to a new picture, shimmer while the first one is drawn */
 .c-img-wrap { position: relative; }
+/* On the canvas (not in a widget slot) a picture keeps its own shape, centred, and fits between the title and the bottom bar */
+.render:not([class*="size-"]) .c-img-wrap { width: fit-content; max-width: 100%; margin: 0 auto; }
+.render:not([class*="size-"]) .c-img-wrap > .c-img { width: auto; max-width: 100%; height: auto; max-height: max(220px, calc(100dvh - var(--bar-h) - var(--safe-bottom) - var(--safe-top) - 190px)); }
+.render:not([class*="size-"]) .c-img-empty { max-height: max(220px, calc(100dvh - var(--bar-h) - var(--safe-bottom) - var(--safe-top) - 190px)); margin: 0 auto; }
 .c-img-next { position: absolute; inset: 0; height: 100%; opacity: 0; transition: opacity .9s ease; }
 .c-img-next.first { position: static; height: auto; }
 .c-img-next.in { opacity: 1; }
@@ -276,6 +280,7 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
 .tl { animation: fade .2s; align-self: flex-start; max-width: 85%; padding: 8px 12px; border-radius: 14px; font-size: 15px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 8px rgb(0 0 0 / .06); }
 .tl.user { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-color: transparent; }
 .tl.partial { opacity: .7; }
+.tl.out { opacity: 0; transform: translateY(-4px); transition: opacity .6s ease, transform .6s ease; }
 .recharts-wrapper:focus, .recharts-surface:focus, .recharts-wrapper *:focus { outline: none; }
 .text-sheet { padding-bottom: calc(var(--safe-bottom) + 12px); }
 .text-row { display: flex; gap: 8px; }
