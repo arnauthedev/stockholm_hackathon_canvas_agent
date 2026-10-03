@@ -1,6 +1,6 @@
 # Canvas Agent
 
-A mobile PWA that is almost nothing on its own. It has an empty canvas, a Talk button, a Text button and a Camera button. An voice/text **brain** talks with you and builds the interface through tool calls: it renders UI, pins widgets, runs tasks, and keeps widgets live.
+A mobile PWA that is almost nothing on its own. It has an empty canvas, a Talk button, a Text button and a Camera button. An OpenAI voice/text **brain** talks with you and builds the interface through tool calls: it renders UI, pins widgets, runs tasks, and keeps widgets live.
 
 - Spec: [docs/SPEC.md](docs/SPEC.md) · Decisions: [docs/DECISIONS.md](docs/DECISIONS.md)
 - Run locally: [deploy/local.md](deploy/local.md)
