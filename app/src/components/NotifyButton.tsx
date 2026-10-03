@@ -8,7 +8,7 @@ const HINT: Partial<Record<PushState, string>> = {
   denied: "Notifications are blocked for this app — allow them in the system settings.",
 };
 
-/** Bell in the Tasks header: enable / test / disable push notifications. */
+/** Settings row control: enable / test / disable push notifications. */
 export function NotifyButton() {
   const [state, setState] = useState<PushState | null>(null);
   useEffect(() => {

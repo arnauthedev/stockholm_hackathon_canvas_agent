@@ -33,7 +33,8 @@ interface State {
   busy: string | null;
   activity: ActivityEntry[];
   triggers: TriggerJson[];
-  page: number; // pager index
+  page: number; // pager index: 0 canvas, 1+ screens
+  tasksOpen: boolean;
   hydrate(s: StateSnapshot): void;
   apply(e: ServerEvent): void;
   set(p: Partial<State>): void;
@@ -72,7 +73,8 @@ export const useStore = create<State>((set, get) => ({
   busy: null,
   activity: [],
   triggers: [],
-  page: 1,
+  page: 0,
+  tasksOpen: false,
   set: (p) => set(p),
   hydrate: (s) =>
     set({
@@ -109,7 +111,7 @@ export const useStore = create<State>((set, get) => ({
         const latest = ids[ids.length - 1];
         // results produced by background tasks show up without yanking the user to the canvas page
         const jump = e.canvas.id !== s.canvas?.id && !e.canvas.meta.task_id;
-        if (!s.canvas || e.canvas.id === latest) set({ canvas: e.canvas, canvasIds: ids, page: jump ? 1 : s.page });
+        if (!s.canvas || e.canvas.id === latest) set({ canvas: e.canvas, canvasIds: ids, page: jump ? 0 : s.page });
         else set({ canvasIds: ids });
         break;
       }
@@ -193,7 +195,7 @@ export const useStore = create<State>((set, get) => ({
         set({ activity: [...s.activity, e.entry].slice(-300) });
         break;
       case "reset":
-        set({ transcript: [], modals: [], link: null, busy: null, page: 1, canvas: null, canvasIds: [], apps: {}, tasks: {} });
+        set({ transcript: [], modals: [], link: null, busy: null, page: 0, tasksOpen: false, canvas: null, canvasIds: [], apps: {}, tasks: {} });
         void api<StateSnapshot>("/api/state").then((st) => get().hydrate(st));
         break;
     }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore } from "../lib/store.ts";
+import { useStore, type TranscriptLine } from "../lib/store.ts";
 import { openLink } from "../lib/links.ts";
 import { ApprovalCard } from "../catalog/ApprovalCard.tsx";
 import { Ctx } from "../catalog/context.ts";
@@ -70,23 +70,38 @@ export function LinkPrompt() {
 }
 
 const LINGER_MS = 8000;
+const FADE_MS = 600;
 
 /** Live transcript bubbles; final lines fade out after a few seconds so the canvas stays visible. */
 export function TranscriptOverlay({ visible }: { visible: boolean }) {
   const lines = useStore((s) => s.transcript);
-  const [now, setNow] = useState(Date.now());
+  const [, setNow] = useState(Date.now());
   const ref = useRef<HTMLDivElement>(null);
+  const prevLive = useRef<TranscriptLine[]>([]);
+  // lines that just left (expired or pushed out by a newer one) stay mounted while they fade
+  const leaving = useRef(new Map<number, { line: TranscriptLine; since: number }>()).current;
+  const t = Date.now();
+  const live = lines.filter((l) => !l.final || t - l.at < LINGER_MS).slice(-3);
+  const liveIds = new Set(live.map((l) => l.id));
+  for (const l of prevLive.current) if (!liveIds.has(l.id) && !leaving.has(l.id)) leaving.set(l.id, { line: l, since: t });
+  for (const [id, x] of leaving) if (liveIds.has(id) || t - x.since >= FADE_MS) leaving.delete(id);
+  prevLive.current = live;
   useEffect(() => {
     ref.current?.scrollTo({ top: ref.current.scrollHeight });
-    const t = setTimeout(() => setNow(Date.now()), LINGER_MS + 50);
-    return () => clearTimeout(t);
   }, [lines]);
-  const shown = lines.filter((l) => !l.final || now - l.at < LINGER_MS || Date.now() - l.at < LINGER_MS).slice(-3);
+  // re-render at the next moment a line should start or finish fading
+  useEffect(() => {
+    const due = [...live.filter((l) => l.final).map((l) => l.at + LINGER_MS), ...[...leaving.values()].map((x) => x.since + FADE_MS)];
+    if (!due.length) return;
+    const id = setTimeout(() => setNow(Date.now()), Math.max(0, Math.min(...due) - Date.now()) + 20);
+    return () => clearTimeout(id);
+  });
+  const shown = [...live, ...[...leaving.values()].map((x) => x.line)].sort((a, b) => a.id - b.id);
   if (!visible || !shown.length) return null;
   return (
     <div className="transcript" ref={ref}>
       {shown.map((l) => (
-        <div key={l.id} className={`tl ${l.role} ${l.final ? "" : "partial"}`}>{l.text}</div>
+        <div key={l.id} className={`tl ${l.role} ${l.final ? "" : "partial"} ${liveIds.has(l.id) ? "" : "out"}`}>{l.text}</div>
       ))}
     </div>
   );

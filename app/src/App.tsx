@@ -5,7 +5,7 @@ import { CanvasView } from "./components/CanvasView.tsx";
 import { LinkPrompt, ModalSheet, Toasts, TranscriptOverlay } from "./components/Overlay.tsx";
 import { Pager } from "./components/Pager.tsx";
 import { ScreenView } from "./components/ScreensView.tsx";
-import { TasksView } from "./components/TasksView.tsx";
+import { TasksSheet } from "./components/TasksView.tsx";
 import { TextSheet } from "./components/TextSheet.tsx";
 import { PhotoSheet } from "./components/PhotoSheet.tsx";
 import { SettingsSheet } from "./components/SettingsSheet.tsx";
@@ -17,7 +17,6 @@ import { PhoneVoice, type CallMode } from "./lib/voice.ts";
 
 export function App() {
   const theme = useStore((s) => s.theme);
-  const connected = useStore((s) => s.connected);
   const screens = useStore((s) => s.screens);
   // One call at a time: `call` is its state, `mode` which button started it (Talk or Live vision).
   const [call, setCall] = useState<TalkState>("idle");
@@ -64,12 +63,12 @@ export function App() {
     const go = (url: string) => {
       const h = url.includes("#") ? url.slice(url.indexOf("#") + 1) : "";
       const s = useStore.getState();
-      if (h.startsWith("task=")) s.set({ page: 0 });
+      if (h.startsWith("task=")) s.set({ tasksOpen: true });
       else if (h.startsWith("app=")) {
         const slug = decodeURIComponent(h.slice(4));
         const i = s.screens?.screens.findIndex((sc) => sc.id === s.apps[slug]?.app.screen) ?? -1;
-        s.set({ page: i >= 0 ? 2 + i : 1 });
-      } else if (h === "approval") s.set({ page: 1 });
+        s.set({ page: i >= 0 ? 1 + i : 0 });
+      } else if (h === "approval") s.set({ page: 0 });
     };
     if (/#(task|app)=|#approval/.test(location.hash)) {
       setTimeout(() => go(location.hash), 600); // after state hydrates
@@ -87,17 +86,13 @@ export function App() {
 
   const screenList = screens?.screens ?? [{ id: "s1" }];
   const pages = [
-    { key: "tasks", label: "Tasks", node: <TasksView /> },
     { key: "canvas", label: "Canvas", node: <CanvasView /> },
     ...screenList.map((s, i) => ({ key: s.id, label: `Screen ${i + 1}`, node: <ScreenView screenId={s.id} /> })),
   ];
 
   return (
     <div className="app">
-      <div className={connected ? "conn ok" : "conn"} title={connected ? "Connected" : "Offline"} />
-      <button className="settings-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" /></svg>
-      </button>
+      <TopBar onSettings={() => setSettingsOpen(true)} />
       <Toasts />
       <Pager pages={pages} />
       <TranscriptOverlay visible />
@@ -113,9 +108,38 @@ export function App() {
       />
       <TextSheet open={textOpen} onClose={() => setTextOpen(false)} />
       <PhotoSheet file={photo} onClose={() => setPhoto(null)} />
+      <TasksSheet />
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       <ModalSheet />
     </div>
+  );
+}
+
+/** Top-left buttons: settings, and tasks with a badge for open ones (red when something needs you). */
+function TopBar({ onSettings }: { onSettings(): void }) {
+  const connected = useStore((s) => s.connected);
+  const tasks = Object.values(useStore((s) => s.tasks));
+  const open = tasks.filter((t) => !["done", "cancelled", "failed"].includes(t.task.status)).length;
+  const needsYou = tasks.some((t) => t.task.status === "waiting_user");
+  return (
+    <>
+      <div className={connected ? "conn ok" : "conn"} title={connected ? "Connected" : "Offline"} />
+      <div className="top-btns">
+        <button className="top-btn" aria-label="Settings" onClick={onSettings}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+            <circle cx="15" cy="7" r="2" />
+            <circle cx="9" cy="17" r="2" />
+          </svg>
+        </button>
+        <button className="top-btn" aria-label={`Tasks${open ? `, ${open} open` : ""}`} onClick={() => useStore.getState().set({ tasksOpen: true })}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m3 6 2 2 3-3M3 16l2 2 3-3M12 7h9M12 17h9" />
+          </svg>
+          {open > 0 && <span className={`top-badge ${needsYou ? "alert" : ""}`}>{open}</span>}
+        </button>
+      </div>
+    </>
   );
 }
 

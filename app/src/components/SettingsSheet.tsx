@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.ts";
+import { isMacShell } from "../lib/shell.ts";
 import { useStore } from "../lib/store.ts";
+import { InstallSetting } from "./InstallSetting.tsx";
+import { NotifyButton } from "./NotifyButton.tsx";
 
 type TalkVoice = "openai" | "google";
 const TALK_OPTIONS: [TalkVoice, string][] = [
@@ -8,7 +11,7 @@ const TALK_OPTIONS: [TalkVoice, string][] = [
   ["google", "Gemini"],
 ];
 
-/** Settings kept on the runner (agent-home/settings.json): for now, the Talk call's voice provider. */
+/** Settings: the Talk voice (kept on the runner, agent-home/settings.json), notifications, install and reset. */
 export function SettingsSheet({ onClose }: { onClose(): void }) {
   const [talk, setTalk] = useState<TalkVoice | null>(null);
   const [saving, setSaving] = useState(false);
@@ -51,7 +54,43 @@ export function SettingsSheet({ onClose }: { onClose(): void }) {
             ))}
           </div>
         </div>
+        {!isMacShell && (
+          <div className="setting setting-row">
+            <div className="setting-label">
+              Notifications
+              <small>Task results and reminders on this device.</small>
+            </div>
+            <NotifyButton />
+          </div>
+        )}
+        {!isMacShell && <InstallSetting />}
+        <ResetSetting />
       </div>
+    </div>
+  );
+}
+
+function ResetSetting() {
+  const [busy, setBusy] = useState(false);
+  const reset = async () => {
+    if (!confirm("Reset everything? Canvases, pinned widgets, tasks and conversations are cleared (a backup is kept on the computer). Your profile and themes stay.")) return;
+    setBusy(true);
+    try {
+      await api("/api/reset", { method: "POST" });
+      useStore.getState().toast({ text: "Fresh start", kind: "success" });
+    } catch (e) {
+      useStore.getState().toast({ text: String(e instanceof Error ? e.message : e), kind: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="setting setting-row">
+      <div className="setting-label">
+        Reset
+        <small>Clears canvases, widgets, tasks and conversations.</small>
+      </div>
+      <button className="btn danger" disabled={busy} onClick={() => void reset()}>{busy ? "Resetting…" : "Reset"}</button>
     </div>
   );
 }
