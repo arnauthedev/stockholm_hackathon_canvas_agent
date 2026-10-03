@@ -50,9 +50,12 @@ fi
 node scripts/pair.mjs "$PUBLIC_URL" "$RUNNER_TOKEN" "$PORT"
 echo "$PUBLIC_URL" > logs/public-url
 
+SERVE_URL="$PUBLIC_URL"
 while true; do
-  # tsx forwards SIGTERM to the node process, so killing this PID stops the runner.
-  (cd runner && PUBLIC_URL="$PUBLIC_URL" exec ./node_modules/.bin/tsx src/main.ts) &
+  # The runner must read .env itself (process.loadEnvFile never overrides), so drop any inherited copy of
+  # its keys, e.g. from a caller that exported .env. tsx forwards SIGTERM, so killing this PID stops it.
+  ENV_KEYS=$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' .env | tr -d =)
+  (cd runner && unset $ENV_KEYS && PUBLIC_URL="$SERVE_URL" exec ./node_modules/.bin/tsx src/main.ts) &
   RUNNER_PID=$!
   echo "$RUNNER_PID" > logs/runner.pid
   wait "$RUNNER_PID" || true
