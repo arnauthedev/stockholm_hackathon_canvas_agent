@@ -48,7 +48,8 @@ fi
 
 # --- Tunnel tool: use an installed one, else download cloudflared into ./bin ---
 mkdir -p bin logs
-if command -v cloudflared >/dev/null || command -v ngrok >/dev/null || command -v tailscale >/dev/null || [ -x bin/cloudflared ]; then
+# cloudflared needs no account; ngrok/tailscale count only when configured (a bare ngrok binary is not enough).
+if command -v cloudflared >/dev/null || [ -x bin/cloudflared ] || { command -v ngrok >/dev/null && ngrok config check >/dev/null 2>&1; } || { command -v tailscale >/dev/null && tailscale status >/dev/null 2>&1; }; then
   say "tunnel tool present"
 else
   OS="$(uname -s | tr '[:upper:]' '[:lower:]')"; ARCH="$(uname -m)"
