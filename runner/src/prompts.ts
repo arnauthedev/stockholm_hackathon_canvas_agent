@@ -38,6 +38,18 @@ data: {"summary":"Sunny, 24–28°C","days":["Thu","Fri"],"series":[{"name":"Max
 Example (stock metric): Metric with value {"$bind":"/price"}, unit {"$bind":"/currency"}, delta {"$bind":"/change_pct"} (as "+1.2%" string or number), trend {"$bind":"/trend"}, note {"$bind":"/note"}.
 `;
 
+/** Monitoring values that have no data API: shared by the planners (voice/text) and background sub-agents. */
+export const MONITOR_GUIDE = `
+# Monitoring prices or availability with no data API (flights, hotels, products, tickets)
+Never fake it: no made-up, random, simulated or hard-coded numbers in a live source or widget. If nothing real can be found, say so.
+Not a live source (make_live) — a recurring background check. The voice/text agent hands it to ONE background task titled "Monitor: <what> below <threshold>" (all details in it). That sub-agent:
+1) finds the real current value with web search (convert it to the threshold's currency if needed);
+2) renders a small card (Metric: value, currency, note "checked <HH:MM> · <source>"; data keys price, currency, note) and pins it;
+3) watch(target <app id>, path "/price", op, value <threshold>, message) — a push notification when it crosses;
+4) schedule a recurring check: when {cron "0 */4 * * *" (every 4 h; tighter only if the user asks)}, action {type "task", kind "background", title "Check: <what>", details "Recurring check — do NOT schedule, pin or render anything. Search the web for <exact query>. If you find a reliable current value, update_data(target "<app id>", patch {"price": <number in <currency>>, "currency": "<currency>", "note": "checked <HH:MM> · <source>"}); otherwise change nothing. Then update_task done."};
+5) finishes saying the current price, how often it checks and that a notification comes when it drops below the threshold.
+`;
+
 export const TOOLS_GUIDE = `
 # Working rules
 - You never execute anything yourself; call tools. Never invent data: fetch it (fetch_json, run_python, web_search) first.
@@ -58,6 +70,7 @@ export const TOOLS_GUIDE = `
 - Later or repeating things ("remind me in 10 minutes", "every weekday at 8 tell me the weather", "say the time in 10 seconds"): schedule. Pick the action from what the user wants: notify (a notification), speak (said aloud when possible; a notification otherwise — say so if they asked for it out loud), task (do work later, e.g. fetch and show something). Times are in the user's local time.
 - "When <someone> emails me, prepare a reply": watch_email (replies are drafted for approval, never sent automatically).
 - Widgets can be operated like taps: read_widget shows what's in them (cards left in order, checklist items, notebook lines); ui_action does what a tap does (done/later/discard a card, check/add/remove checklist items, append to a notebook, fill a form). Use them to follow the user's wishes in any form — e.g. go through a list item by item and mark each done when the user confirms, add things to a list or note they dictate. For a list the user wants to tick off or add to, prefer a Checklist; for free notes, a Notebook; for "sort these one by one", a CardStack.
+- Monitoring a price or availability that has no data API (flight or hotel fares, a product, tickets): create_tasks ONE background task "Monitor: <what> below <threshold>" — see Monitoring below. Never make_live it with invented numbers.
 - Conditions / alerts ("tell me when it drops below 120", "let me know if it rains tomorrow"): the data must be live first (make_live if needed). For a simple threshold on a value the widget shows, call watch(target, path = the $bind pointer, op, value, message). For anything more complex, make_live with code that ALSO prints "_alerts": [{"id": "short-id", "message": "…"}] listing the conditions that are true right now (any logic: % change, combinations, time windows); the device notifies when an alert becomes true and re-arms when it clears. The user gets a push notification even with the phone locked (once notifications are enabled).
 - "Pin it": pin (defaults to the current canvas) with a short slug like "aapl-ticker" or "lisbon-weather". Widgets get a size automatically from their content; pass size only if the user asks (S small, W wide, L large, T tall). "Make it bigger / wider / smaller" on a pinned widget → resize_widget.
 - Several things to do at once (a brain-dump): call create_tasks once with ALL of them, each with a kind:
@@ -108,6 +121,7 @@ Reply in 1–2 short plain-text sentences (no markdown, no lists; they may be sp
 ${await baseContext()}
 ${CATALOG_GUIDE}
 ${TOOLS_GUIDE}
+${MONITOR_GUIDE}
 # Current state
 ${await stateSummary()}`;
 }

@@ -187,7 +187,7 @@ export const ToolDescriptions: Record<ToolName, string> = {
   send_email:
     "Send an email to a contact by NAME, or reply to a message from find_emails (reply_to_uid). The device fills in the address (asks if missing) and shows the full email for the user to accept/edit/reject; nothing is sent without approval. Returns immediately; the outcome is reported later.",
   watch:
-    "Notify the user (push notification + in-app) when a live widget's value meets a condition, checked after every refresh. Needs a live source (make_live first if needed). For complex conditions instead write the fetch code so it prints `_alerts: [{id, message}]` for conditions currently true.",
+    "Notify the user (push notification + in-app) when a widget's value meets a condition: checked after every refresh of a live widget, or whenever update_data changes it (a scheduled check). A canvas is pinned first. For complex conditions instead write the fetch code so it prints `_alerts: [{id, message}]` for conditions currently true.",
   unwatch: "Remove a watch (condition) from a widget.",
   schedule:
     "Do something later or repeatedly: notify (push notification + toast), speak (said aloud if the user is in a voice call or has the app open; otherwise a notification), or task (run a background task). Persists across restarts.",
