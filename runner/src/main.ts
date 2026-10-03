@@ -13,7 +13,9 @@ import { jobCount, resumeJobs } from "./jobs.ts";
 import { initHome, snapshot } from "./store.ts";
 import * as uiActions from "./uiactions.ts";
 import { textSession, textTurn } from "./brain.ts";
-import { createLiveSession, getLiveSession, listLiveSessions } from "./voice/live.ts";
+import { createLiveSession } from "./voice/live.ts";
+import { attachVoiceRelay } from "./voice/gemini.ts";
+import { getVoiceSession, listVoiceSessions } from "./voice/core.ts";
 import { recentActivity, startedAt } from "./monitor.ts";
 import { listJobs } from "./jobs.ts";
 import { listTextSessions } from "./brain.ts";
@@ -65,7 +67,7 @@ app.use("/api/*", async (c, next) => {
   await next();
 });
 
-app.get("/api/health", (c) => c.json({ ok: true, agent_home: env.AGENT_HOME, clients: bus.clients, jobs: jobCount(), openai: !!env.OPENAI_API_KEY }));
+app.get("/api/health", (c) => c.json({ ok: true, agent_home: env.AGENT_HOME, clients: bus.clients, jobs: jobCount(), openai: !!env.OPENAI_API_KEY, gemini: !!env.GEMINI_API_KEY }));
 app.get("/api/state", async (c) => c.json(await snapshot()));
 // Dashboard: what the server is doing right now (activity also streams live on the bus).
 app.get("/api/monitor", (c) =>
@@ -74,7 +76,7 @@ app.get("/api/monitor", (c) =>
     clients: bus.clients,
     routes: Object.fromEntries((["voice", "brain", "subagent", "vision"] as const).map((j) => [j, { model: route(j).model, reasoning: route(j).reasoning ?? null }])),
     jobs: listJobs(),
-    sessions: { voice: listLiveSessions(), text: listTextSessions() },
+    sessions: { voice: listVoiceSessions(), text: listTextSessions() },
     approvals: pendingApprovals().map((a) => ({ approval_id: a.approval_id, title: String(a.card.title ?? "") })),
     activity: recentActivity(),
   }),
@@ -99,8 +101,16 @@ app.post("/api/chat", async (c) => {
   return c.json({ session_id, status: "started" });
 });
 
+// Which realtime provider the phone should connect to (routes.voice): openai → WebRTC via
+// POST /api/voice/session; google → audio over the /voice WebSocket (camera frames allowed).
+app.get("/api/voice/provider", (c) => {
+  const v = route("voice");
+  const key = v.provider === "google" ? env.GEMINI_API_KEY : env.OPENAI_API_KEY;
+  return c.json({ provider: v.provider, model: v.model, video: v.provider === "google", ready: !!key });
+});
 // Voice (GPT-Live): phone sends its SDP offer, runner creates the session and attaches the sideband.
 app.post("/api/voice/session", async (c) => {
+  if (route("voice").provider !== "openai") return c.json({ error: `voice provider is ${route("voice").provider}: connect to /voice instead` }, 409);
   if (!env.OPENAI_API_KEY) return c.json({ error: "OPENAI_API_KEY is not set in .env" }, 503);
   const { sdp } = (await c.req.json().catch(() => ({}))) as { sdp?: string };
   if (!sdp) return c.json({ error: "sdp required" }, 400);
@@ -112,8 +122,8 @@ app.post("/api/voice/session", async (c) => {
     return c.json({ error: msg }, 502);
   }
 });
-app.post("/api/voice/:id/interrupt", (c) => (getLiveSession(c.req.param("id"))?.interrupt(), c.json({ ok: true })));
-app.post("/api/voice/:id/close", async (c) => (await getLiveSession(c.req.param("id"))?.close(), c.json({ ok: true })));
+app.post("/api/voice/:id/interrupt", (c) => (getVoiceSession(c.req.param("id"))?.interrupt(), c.json({ ok: true })));
+app.post("/api/voice/:id/close", async (c) => (await getVoiceSession(c.req.param("id"))?.close(), c.json({ ok: true })));
 
 // Camera / gallery: multipart {file, text?, session_id?}
 app.post("/api/upload", async (c) => {
@@ -198,3 +208,4 @@ const server = serve({ fetch: app.fetch, port: env.PORT, hostname: env.HOST }, (
   console.log(`[runner] listening on :${info.port}  AGENT_HOME=${env.AGENT_HOME}`);
 });
 bus.attach(server as Server);
+attachVoiceRelay(server as Server);

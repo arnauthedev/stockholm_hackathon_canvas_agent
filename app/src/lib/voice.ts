@@ -1,17 +1,75 @@
-import { api } from "./api.ts";
+import { api, token } from "./api.ts";
+
+export type VoiceState = "connecting" | "live" | "idle" | "error";
 
 /**
- * Phone half of the GPT-Live session (B9): mic → WebRTC → OpenAI, agent audio ← WebRTC.
- * The SDP offer goes to the runner, which creates the session (no keys on the phone).
- * Transcripts and tool activity arrive over the bus from the runner's sideband.
+ * Phone half of a voice call (B9). The runner's `voice` route picks the provider:
+ * - openai: mic → WebRTC → OpenAI (GPT-Live); the runner holds the sideband.
+ * - google: mic → PCM over the runner's /voice WebSocket → Gemini Live; agent audio comes back the
+ *   same way, and camera frames can go up while the camera is open.
+ * Transcripts and tool activity arrive over the bus from the runner either way.
  */
 export class PhoneVoice {
+  private impl: WebRtcVoice | RelayVoice | null = null;
+  /** The provider accepts camera frames (set once the call is live). */
+  video = false;
+  onState: (s: VoiceState, err?: string) => void = () => {};
+
+  get sessionId() {
+    return this.impl?.sessionId ?? null;
+  }
+
+  async start() {
+    this.onState("connecting");
+    // Created inside the tap's task so iOS lets it play later (the provider lookup below is async).
+    const ctx = new AudioContext();
+    void ctx.resume().catch(() => {});
+    let p: { provider: string; model: string; video: boolean; ready: boolean };
+    try {
+      p = await api("/api/voice/provider");
+    } catch (err) {
+      void ctx.close();
+      return this.onState("error", err instanceof Error ? err.message : String(err));
+    }
+    if (!p.ready) {
+      void ctx.close();
+      return this.onState("error", `${p.provider === "google" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"} is not set in .env`);
+    }
+    this.video = p.video;
+    const impl = p.provider === "google" ? new RelayVoice(ctx) : (void ctx.close(), new WebRtcVoice());
+    this.impl = impl;
+    impl.onState = (s, err) => {
+      if (s === "idle" || s === "error") {
+        this.impl = null;
+        this.video = false;
+      }
+      this.onState(s, err);
+    };
+    await impl.start();
+  }
+
+  interrupt() {
+    this.impl?.interrupt();
+  }
+
+  async stop() {
+    await this.impl?.stop();
+  }
+
+  /** A camera frame (base64 JPEG) for providers that take video. */
+  sendFrame(jpeg: string) {
+    this.impl?.sendFrame?.(jpeg);
+  }
+}
+
+class WebRtcVoice {
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
   private mic: MediaStream | null = null;
   private audio: HTMLAudioElement;
   sessionId: string | null = null;
-  onState: (s: "connecting" | "live" | "idle" | "error", err?: string) => void = () => {};
+  onState: (s: VoiceState, err?: string) => void = () => {};
+  sendFrame?: (jpeg: string) => void; // GPT-Live has no image input
 
   constructor() {
     this.audio = document.createElement("audio");
@@ -21,7 +79,6 @@ export class PhoneVoice {
   }
 
   async start() {
-    this.onState("connecting");
     try {
       this.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       const pc = new RTCPeerConnection();
@@ -79,6 +136,7 @@ export class PhoneVoice {
     this.dc = null;
     this.sessionId = null;
     this.audio.srcObject = null;
+    this.audio.remove();
     this.onState(state, err);
   }
 }
@@ -94,4 +152,152 @@ function waitIce(pc: RTCPeerConnection, timeoutMs = 2500): Promise<void> {
       }
     });
   });
+}
+
+const OUT_RATE = 24000; // Gemini speaks PCM16 at 24 kHz; the context resamples to the device rate
+const PLAY_LEAD = 0.02; // s between receiving a chunk and playing it: hides network jitter without adding noticeable delay
+
+/** Gemini via the runner: PCM both ways over one WebSocket. */
+class RelayVoice {
+  private ws: WebSocket | null = null;
+  private mic: MediaStream | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  private capture: AudioWorkletNode | null = null;
+  private playAt = 0; // when the next chunk starts (gapless playback)
+  private playing = new Set<AudioBufferSourceNode>();
+  private done = false;
+  sessionId: string | null = null;
+  onState: (s: VoiceState, err?: string) => void = () => {};
+
+  constructor(private readonly ctx: AudioContext) {}
+
+  async start() {
+    try {
+      const [mic] = await Promise.all([
+        navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }),
+        this.ctx.audioWorklet.addModule("/pcm-worklet.js"),
+      ]);
+      this.mic = mic;
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://${location.host}/voice?token=${encodeURIComponent(token)}`);
+      ws.binaryType = "arraybuffer";
+      this.ws = ws;
+      await new Promise<void>((resolve, reject) => {
+        ws.onopen = () => resolve();
+        ws.onerror = () => reject(new Error("voice socket failed"));
+        ws.onclose = (e) => reject(new Error(e.reason || `voice socket closed (${e.code})`));
+      });
+      ws.onerror = null;
+      ws.onclose = () => this.cleanup("idle");
+      ws.onmessage = (m) => (m.data instanceof ArrayBuffer ? this.play(m.data) : this.onControl(String(m.data)));
+      // mic → worklet (PCM16 16 kHz) → socket. A muted path to the output keeps the worklet scheduled.
+      this.source = this.ctx.createMediaStreamSource(mic);
+      this.capture = new AudioWorkletNode(this.ctx, "pcm16-capture", { processorOptions: { targetRate: 16000 } });
+      this.capture.port.onmessage = (e) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(e.data as ArrayBuffer);
+      };
+      const mute = this.ctx.createGain();
+      mute.gain.value = 0;
+      this.source.connect(this.capture).connect(mute).connect(this.ctx.destination);
+      document.addEventListener("visibilitychange", this.onVisibility);
+    } catch (err) {
+      this.cleanup("error", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private onVisibility = () => {
+    // backgrounded: the mic stops delivering; tell the server the stream paused (VAD) instead of leaving it hanging
+    if (document.hidden) this.send({ type: "audio_end" });
+  };
+
+  private onControl(raw: string) {
+    let e: { type?: string; session_id?: string; message?: string };
+    try {
+      e = JSON.parse(raw) as typeof e;
+    } catch {
+      return;
+    }
+    switch (e.type) {
+      case "ready":
+        this.sessionId = e.session_id ?? null;
+        this.onState("live");
+        break;
+      case "interrupted":
+        this.clearPlayback();
+        break;
+      case "error":
+        this.cleanup("error", e.message);
+        break;
+      case "closed":
+        this.cleanup("idle");
+        break;
+    }
+  }
+
+  private play(buf: ArrayBuffer) {
+    if (this.done) return;
+    const i16 = new Int16Array(buf.byteLength & 1 ? buf.slice(0, buf.byteLength - 1) : buf);
+    const f32 = new Float32Array(i16.length);
+    for (let i = 0; i < i16.length; i++) f32[i] = i16[i]! / 32768;
+    const ab = this.ctx.createBuffer(1, f32.length, OUT_RATE);
+    ab.getChannelData(0).set(f32);
+    const s = this.ctx.createBufferSource();
+    s.buffer = ab;
+    s.connect(this.ctx.destination);
+    const at = Math.max(this.ctx.currentTime + PLAY_LEAD, this.playAt);
+    s.start(at);
+    this.playAt = at + ab.duration;
+    this.playing.add(s);
+    s.onended = () => this.playing.delete(s);
+  }
+
+  private clearPlayback() {
+    for (const s of this.playing) {
+      try {
+        s.stop();
+      } catch {}
+    }
+    this.playing.clear();
+    this.playAt = 0;
+  }
+
+  private send(e: Record<string, unknown>) {
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(e));
+  }
+
+  sendFrame(jpeg: string) {
+    this.send({ type: "video", data: jpeg });
+  }
+
+  /** Stop the agent talking right now: drop queued audio and tell the session. */
+  interrupt() {
+    this.clearPlayback();
+    this.send({ type: "interrupt" });
+  }
+
+  async stop() {
+    this.send({ type: "close" });
+    setTimeout(() => this.cleanup("idle"), 400);
+  }
+
+  private cleanup(state: "idle" | "error", err?: string) {
+    if (this.done) return;
+    this.done = true;
+    document.removeEventListener("visibilitychange", this.onVisibility);
+    this.clearPlayback();
+    this.mic?.getTracks().forEach((t) => t.stop());
+    this.mic = null;
+    try {
+      this.source?.disconnect();
+      this.capture?.disconnect();
+    } catch {}
+    void this.ctx.close().catch(() => {});
+    if (this.ws && this.ws.readyState <= WebSocket.OPEN) {
+      this.ws.onclose = null;
+      this.ws.close();
+    }
+    this.ws = null;
+    this.sessionId = null;
+    this.onState(state, err);
+  }
 }

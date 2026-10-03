@@ -23,6 +23,8 @@ function validTimezone(tz: string | undefined): string | undefined {
 
 export const env = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
+  // Gemini (realtime voice when routes.voice is google). GOOGLE_API_KEY is the SDK's own name for it.
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "",
   RUNNER_TOKEN: process.env.RUNNER_TOKEN ?? "",
   AGENT_HOME: abs(process.env.AGENT_HOME || "./agent-home"),
   PORT: Number(process.env.PORT || 18787),

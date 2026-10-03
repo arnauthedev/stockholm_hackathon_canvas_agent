@@ -9,7 +9,7 @@ import { stopAllJobs } from "./jobs.ts";
 import { stopAllTriggers } from "./triggers.ts";
 import { paths, readScreens, writeScreens } from "./store.ts";
 import { stopAllTasks } from "./taskrunner.ts";
-import { closeAllLiveSessions } from "./voice/live.ts";
+import { closeAllVoiceSessions } from "./voice/core.ts";
 
 const STATE = ["canvas", "apps", "tasks", "sessions", "uploads", "triggers", "screens.json"] as const;
 const KEEP_BACKUPS = 5;
@@ -43,7 +43,7 @@ export async function resetState() {
     stopAllTasks();
     clearApprovals();
     clearTextSessions();
-    await closeAllLiveSessions().catch(() => {});
+    await closeAllVoiceSessions().catch(() => {});
     const backup = await moveStateToBackup();
     await writeScreens({ ...(await readScreens()), active_theme: theme });
     bus.emit({ type: "reset" });

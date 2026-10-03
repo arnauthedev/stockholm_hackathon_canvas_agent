@@ -15,7 +15,9 @@ bash tests/e2e/run.sh --compare=tests/e2e/results/<main-run>.json   # FIXED / RE
   - `text`: the text brain.
   - `ui`: headless Chrome as the phone.
   - `email`: an Ethereal test mailbox, created per run, with sending enabled only in the isolated runner.
-  - `voice`: TTS-generated speech as a fake microphone, real GPT-Live.
+  - `voice`: TTS-generated speech as a fake microphone, real GPT-Live — or Gemini Live with
+    `ROUTE_voice=google/gemini-3.8-live bash tests/e2e/run.sh --tags=voice` (needs `GEMINI_API_KEY`;
+    add `VOICE_DEBUG=1` to see Gemini's message timeline in the runner log under `.work/`).
 - **Results:** saved in `tests/e2e/results/` (gitignored). Spoken audio is cached in `.cache/`.
 - **Model variance:** text and voice scenarios depend on the model's behaviour, so a single failure may be variance. Rerun with `--only` before concluding a regression.
 - **Branch workflow** (see `docs/ROADMAP.md`):

@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => {
         workbox: {
           navigateFallback: "/index.html",
           importScripts: ["sw-push.js"], // push + notification clicks in the production SW
-          navigateFallbackDenylist: [/^\/api\//, /^\/bus/, /^\/files\//],
+          navigateFallbackDenylist: [/^\/api\//, /^\/bus/, /^\/voice/, /^\/files\//],
           runtimeCaching: [
             // Last known state for offline shell
             { urlPattern: /\/api\/state/, handler: "NetworkFirst", options: { cacheName: "state", networkTimeoutSeconds: 3 } },
@@ -53,6 +53,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api": { target: runner, changeOrigin: false },
         "/bus": { target: runner, ws: true },
+        "/voice": { target: runner, ws: true }, // Gemini voice relay (audio both ways)
         "/files": { target: runner },
       },
     },

@@ -63,6 +63,18 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
   width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--border);
   background: var(--surface); display: grid; place-items: center; box-shadow: 0 1px 3px rgb(0 0 0 / .08);
 }
+.side-btn.on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+/* Live camera during a Gemini call: small preview above the bar, frames go to the voice session */
+.camera {
+  position: fixed; z-index: 9; right: 12px; bottom: calc(var(--bar-h) + var(--safe-bottom) + 12px);
+  width: 120px; height: 160px; border-radius: 14px; overflow: hidden; background: #000;
+  box-shadow: 0 6px 20px rgb(0 0 0 / .25); border: 1px solid var(--border);
+}
+.camera video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.camera-close {
+  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; border: 0;
+  background: rgb(0 0 0 / .55); color: #fff; font-size: 13px; display: grid; place-items: center;
+}
 .talk-btn {
   position: relative; width: 76px; height: 76px; border-radius: 50%; border: 0;
   background: var(--accent); color: var(--accent-text); display: grid; place-items: center;

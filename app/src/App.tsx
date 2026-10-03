@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BottomBar, type TalkState } from "./components/BottomBar.tsx";
+import { CameraPanel } from "./components/CameraPanel.tsx";
 import { CanvasView } from "./components/CanvasView.tsx";
 import { LinkPrompt, ModalSheet, Toasts, TranscriptOverlay } from "./components/Overlay.tsx";
 import { Pager } from "./components/Pager.tsx";
@@ -26,7 +27,8 @@ export function App() {
       voice.current = new PhoneVoice();
       voice.current.onState = (s, err) => {
         setTalk(s);
-        useStore.getState().set({ voiceLive: s === "live", ...(s === "live" ? { trayOpen: false, lastTalkAt: Date.now() } : {}) });
+        const live = s === "live";
+        useStore.getState().set({ voiceLive: live, voiceVideo: live && !!voice.current?.video, ...(live ? { trayOpen: false, lastTalkAt: Date.now() } : { cameraOpen: false }) });
         if (err) useStore.getState().toast({ text: `Voice: ${err}`, kind: "error" });
       };
     }
@@ -40,6 +42,10 @@ export function App() {
   };
   const [textOpen, setTextOpen] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
+  const voiceVideo = useStore((s) => s.voiceVideo);
+  const cameraOpen = useStore((s) => s.cameraOpen);
+  const sendFrame = useCallback((jpeg: string) => voice.current?.sendFrame(jpeg), []);
+  const closeCamera = useCallback(() => useStore.getState().set({ cameraOpen: false }), []);
 
   useEffect(() => {
     if (token) connectBus();
@@ -89,7 +95,14 @@ export function App() {
       <Pager pages={pages} />
       <TranscriptOverlay visible />
       <LinkPrompt />
-      <BottomBar talk={talk} onTalk={onTalk} onText={() => setTextOpen(true)} onImage={setPhoto} />
+      {cameraOpen && voiceVideo && <CameraPanel send={sendFrame} onClose={closeCamera} />}
+      <BottomBar
+        talk={talk}
+        onTalk={onTalk}
+        onText={() => setTextOpen(true)}
+        onImage={setPhoto}
+        camera={talk === "live" && voiceVideo ? { open: cameraOpen, onToggle: () => useStore.getState().set({ cameraOpen: !cameraOpen }) } : null}
+      />
       <TextSheet open={textOpen} onClose={() => setTextOpen(false)} />
       <PhotoSheet file={photo} onClose={() => setPhoto(null)} />
       <ModalSheet />

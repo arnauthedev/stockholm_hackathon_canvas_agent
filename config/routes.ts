@@ -3,9 +3,17 @@
  * env overrides: ROUTE_<job>=provider/model[@effort]
  *   e.g. ROUTE_brain=openai/gpt-6-astra   ROUTE_brain=openai/gpt-6-luna@minimal
  * Model picks are documented in docs/DECISIONS.md. Policy: cheapest, then fastest, then best quality.
+ *
+ * Realtime conversation (`voice`): the model that listens, talks and calls tools during a call.
+ *   openai  gpt-live-1 (WebRTC; tools run in a Responses backend, routes.brain)
+ *   google  gemini-3.8-live (lowest delay) or gemini-3.8-live-extended-thinking (reasons in the
+ *           background; @effort = thinking level low|medium|high). Audio relays through the runner;
+ *           the model holds the tools itself. Needs GEMINI_API_KEY.
+ *   e.g. ROUTE_voice=google/gemini-3.8-live   ROUTE_voice=google/gemini-3.8-live-extended-thinking@low
+ * `voice` names the spoken voice per provider.
  */
 export const routes = {
-  voice: { provider: "openai", session: "gpt-live", model: "gpt-live-1", voice: "marin", enabled: true },
+  voice: { provider: "openai", session: "gpt-live", model: "gpt-live-1", voice: { openai: "marin", google: "Kore" }, enabled: true },
   voiceFallback: { provider: "openai", session: "realtime", model: "gpt-realtime-2.1", voice: "marin", enabled: true },
   brain: { provider: "openai", model: "gpt-6-luna", reasoning: "minimal", voiceReasoning: "minimal", tools: ["web_search"], enabled: true },
   subagent: { provider: "openai", model: "gpt-6-luna", reasoning: "minimal", tools: ["web_search"], enabled: true },

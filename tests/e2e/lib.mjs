@@ -177,5 +177,5 @@ export async function stopVoice(page) {
     await sleep(900);
   }
 }
-// only the voice session's own lines (session ids start with "live_"), not stray text-brain transcripts
-export const finals = (events, role) => events.filter((e) => e.type === "transcript" && e.final && String(e.session_id ?? "").startsWith("live_") && (!role || e.role === role));
+// only the voice session's own lines (session ids start with "live_" for GPT-Live, "gem_" for Gemini), not stray text-brain transcripts
+export const finals = (events, role) => events.filter((e) => e.type === "transcript" && e.final && /^(live_|gem_)/.test(String(e.session_id ?? "")) && (!role || e.role === role));

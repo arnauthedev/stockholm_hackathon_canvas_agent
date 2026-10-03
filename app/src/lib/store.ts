@@ -20,6 +20,8 @@ interface State {
   transcript: TranscriptLine[];
   modals: Modal[];
   voiceLive: boolean;
+  voiceVideo: boolean; // the live call's provider takes camera frames
+  cameraOpen: boolean;
   editMode: boolean;
   optimistic: Record<string, { ui: Record<string, unknown>; ids: string[] }>;
   setOptimistic(key: string, v: { ui: Record<string, unknown>; ids: string[] }): void;
@@ -54,6 +56,8 @@ export const useStore = create<State>((set, get) => ({
   transcript: [],
   modals: [],
   voiceLive: false,
+  voiceVideo: false,
+  cameraOpen: false,
   editMode: false,
   optimistic: {},
   setOptimistic: (key, v) => set({ optimistic: { ...get().optimistic, [key]: v } }),
