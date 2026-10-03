@@ -13,7 +13,7 @@
  * `voice` names the spoken voice per provider.
  */
 export const routes = {
-  voice: { provider: "openai", session: "gpt-live", model: "gpt-live-1", voice: { openai: "marin", google: "Kore" }, enabled: true },
+  voice: { provider: "google", model: "gemini-3.8-live", voice: { openai: "marin", google: "Kore" }, enabled: true }, // openai: gpt-live-1
   voiceFallback: { provider: "openai", session: "realtime", model: "gpt-realtime-2.1", voice: "marin", enabled: true },
   brain: { provider: "openai", model: "gpt-6-luna", reasoning: "minimal", voiceReasoning: "minimal", tools: ["web_search"], enabled: true },
   subagent: { provider: "openai", model: "gpt-6-luna", reasoning: "minimal", tools: ["web_search"], enabled: true },
