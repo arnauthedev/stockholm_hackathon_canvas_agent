@@ -25,6 +25,7 @@ import { resetState } from "./reset.ts";
 import { addSubscription, pushAll, removeSubscription, subscriptionCount, vapidPublicKey } from "./push.ts";
 import { runAppNow } from "./jobs.ts";
 import { handleUpload, serveUpload } from "./uploads.ts";
+import { serveImage } from "./images.ts";
 import { startWatcher } from "./watcher.ts";
 import { currentSettings, isTalkVoice, loadSettings, saveSettings } from "./settings.ts";
 import { resumeTasks } from "./taskrunner.ts";
@@ -142,6 +143,12 @@ app.post("/api/upload", async (c) => {
   if (!(file instanceof File)) return c.json({ error: "file required" }, 400);
   const out = await handleUpload(file, String(form?.get("text") ?? ""), String(form?.get("session_id") ?? "") || undefined);
   return c.json(out, "error" in out ? 400 : 200);
+});
+// Image cards (Nano Banana): same capability URLs; a name is never reused, so it can be cached for good.
+app.get("/files/images/:name", async (c) => {
+  const f = await serveImage(c.req.param("name"));
+  if (!f) return c.notFound();
+  return c.body(new Uint8Array(f.body), 200, { "content-type": f.type, "cache-control": "private, max-age=31536000, immutable" });
 });
 // Uploaded photos: capability URLs (unguessable names) so <img> works without the token.
 app.get("/files/uploads/:name", async (c) => {

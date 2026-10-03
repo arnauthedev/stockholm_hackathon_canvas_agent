@@ -37,9 +37,9 @@ const BASE_TOOLS: ToolName[] = ["update_task", "notify", "fetch_json", "run_pyth
 const KIND_TOOLS: Record<TaskKind, ToolName[]> = {
   handoff: [...BASE_TOOLS],
   approval: [...BASE_TOOLS, "ask_approval", "call_contact", "send_email", "find_emails"],
-  helper: [...BASE_TOOLS, "render", "update_data", "make_live"],
+  helper: [...BASE_TOOLS, "render", "update_data", "make_live", "generate_image"],
   answer: [...BASE_TOOLS],
-  background: [...BASE_TOOLS, "render", "update_data", "make_live", "find_emails", "pin", "watch", "schedule"],
+  background: [...BASE_TOOLS, "render", "update_data", "make_live", "find_emails", "pin", "watch", "schedule", "generate_image"],
 };
 
 const KIND_RULES: Record<TaskKind, string> = {

@@ -50,6 +50,14 @@ export const ToolArgs = {
       "python: code that prints ONE JSON object to stdout (merged into data.json) — or writes data.json itself. http: URL fetched as JSON; json_path picks a sub-object.",
     ),
   }),
+  generate_image: z.object({
+    prompt: z.string().optional().describe("new picture: what to draw · editing (target set): the change, e.g. 'make it darker', 'add a red hat'"),
+    target: z.string().optional().describe("canvas id or app id of an image card to change in place (the picture fades to the new one); omit for a new card"),
+    fresh: z.boolean().optional().describe("with target: draw a new picture from the prompt instead of editing the current one (e.g. scheduled refreshes)"),
+    revert: z.boolean().optional().describe("with target: go back to the previous picture ('undo that')"),
+    title: z.string().optional().describe("short card title (new card)"),
+    aspect: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional().describe("new card: shape (default 1:1)"),
+  }),
   undo: z.object({}),
   create_tasks: z.object({
     tasks: z
@@ -163,6 +171,8 @@ export const ToolDescriptions: Record<ToolName, string> = {
     "Change a pinned widget's size when the user asks ('make it bigger/wider/smaller/taller'). Others are rearranged to fit; it may move to the next screen if there's no room.",
   make_live:
     "Make a canvas or pinned app update itself. Sources: stream (real time, pushed ~1-2×/s: provider 'binance' + symbol like BTCUSDT for crypto, or any WebSocket url + field map), http (JSON URL polled every ≥5 s), python (code printing ONE JSON object, every ≥30 s; e.g. yfinance stocks). Runs once immediately and reports.",
+  generate_image:
+    "Draw a picture with the image model (Nano Banana) as an image card, or change the picture in an existing image card (target) — edit it, redraw it (fresh) or undo (revert). Returns at once; the picture fades in a few seconds later.",
   undo: "Show the previous canvas again.",
   create_tasks:
     "Create tasks from what the user asked. Find dependencies (depends_on). Independent tasks run in parallel in the background via sub-agents; you are told when each finishes.",
@@ -216,6 +226,7 @@ export const ToolMeta: Record<ToolName, { effect: "screen" | "state" | "none"; b
   resize_widget: { effect: "none" },
   unpin: { effect: "state" },
   make_live: { effect: "state", busy: "Making it live…" },
+  generate_image: { effect: "screen", busy: "Drawing…" },
   undo: { effect: "none" },
   create_tasks: { effect: "none", busy: "Planning tasks…" },
   resolve_approval: { effect: "none" },

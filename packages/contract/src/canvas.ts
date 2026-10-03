@@ -44,7 +44,10 @@ export const ComponentProps = {
     kind: b(z.enum(["line", "bar"])), x: b(z.array(z.union([z.string(), z.number()]))), series: b(z.array(ChartSeries)), yUnit: b(z.string()).optional(),
   }),
   List: z.object({ items: b(z.array(ListItem)) }),
-  Image: z.object({ src: b(z.string()), alt: b(z.string()).optional(), fit: b(z.enum(["cover", "contain"])).optional() }),
+  Image: z.object({
+    src: b(z.string()), alt: b(z.string()).optional(), fit: b(z.enum(["cover", "contain"])).optional(),
+    busy: b(z.boolean()).optional(), aspect: b(z.string()).optional(), // image cards: drawing now · shape of the placeholder
+  }),
   Link: z.object({ label: b(z.string()), href: b(z.string()), kind: b(LinkKind) }),
   CardStack: z.object({ cards: b(z.array(StackCard)), actions: b(z.array(z.enum(["done", "later", "discard"]))).optional() }),
   ApprovalCard: z.object({

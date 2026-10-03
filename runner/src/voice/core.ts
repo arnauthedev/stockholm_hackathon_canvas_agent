@@ -301,7 +301,7 @@ function parseUnaddressed(text: string): string | null {
 
 /** What an action did, for the coverage check: task titles in full, other args briefly. */
 /** Tools that read or change "the current canvas" (or widgets): order matters between them. */
-const ORDERED_TOOLS = new Set(["render", "update_data", "make_live", "pin", "unpin", "resize_widget", "undo", "watch", "unwatch", "ui_action"]);
+const ORDERED_TOOLS = new Set(["render", "generate_image", "update_data", "make_live", "pin", "unpin", "resize_widget", "undo", "watch", "unwatch", "ui_action"]);
 
 function actionSummary(name: string, args: unknown): string {
   const a = (args ?? {}) as Record<string, unknown>;
@@ -318,6 +318,7 @@ function screenFact(name: string, args: unknown, out: unknown): string | null {
   if (name === "pin") return `Fact: pinned as widget "${String(o.app_id)}" on screen ${String(o.screen)}${o.already_pinned ? " (it was already pinned)" : ""}.`;
   if (name === "unpin") return `Fact: widget "${String(a.app_id)}" removed.`;
   if (name === "notify") return `Fact: a toast saying "${String(a.text)}" was shown.`;
+  if (name === "generate_image" && !o.error) return a.target ? `Fact: the picture in ${String(o.target)} ${a.revert ? "went back to the previous one" : "is being redrawn; it fades in within a few seconds"}.` : `Fact: an image card is on the screen; the picture fades in within a few seconds.`;
   if (name === "make_live") return `Fact: ${String(o.target)} is now live (${String(o.note ?? "updating")}). Only that canvas or widget updates itself.`;
   // data lookups draw nothing: the model sometimes said "it's on your screen" right after one
   if (name === "weather" || name === "fetch_json" || name === "run_python") return `Fact: this is data only; nothing new is on the user's screen until you render it.`;

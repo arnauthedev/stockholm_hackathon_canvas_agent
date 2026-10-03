@@ -25,7 +25,7 @@ export const routes = {
   subagent: { provider: "openai", model: "gpt-6-luna", reasoning: "minimal", tools: ["web_search"], enabled: true },
   vision: { provider: "openai", model: "gpt-6-luna", enabled: true },
   tts: { provider: "openai", model: "gpt-4o-mini-tts", voice: "coral", enabled: true },
-  image: { provider: "openai", model: "gpt-image-2.5-flare", enabled: false },
+  image: { provider: "google", model: "gemini-3.1-flash-lite-image", enabled: true }, // Nano Banana 2 Lite: image cards (create, edit)
   decide: { provider: "typesafe", model: "jev-latest", enabled: false }, // via Vercel AI Gateway if a key is added
   // Gemini rows present but disabled; enable when GOOGLE_API_KEY exists
   grounding: { provider: "google", model: "gemini-3-flash", native: ["google_search", "google_maps"], enabled: false },

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { openLink } from "../lib/links.ts";
 import { useEmit, useRenderCtx, useWidgetUi } from "./context.ts";
 
@@ -70,8 +70,49 @@ export function List(p: { id: string; items?: unknown }) {
   );
 }
 
-export function Image(p: { src?: unknown; alt?: unknown; fit?: string }) {
-  return <img className="c-img" src={str(p.src)} alt={str(p.alt)} style={{ objectFit: p.fit === "contain" ? "contain" : "cover" }} />;
+const FADE_MS = 900; // matches .c-img-next's transition
+
+/**
+ * Image. A new src crossfades over the old one once it has loaded (image cards change in place);
+ * `busy` shows a shimmer before the first picture and a "Drawing…" veil while it is being redrawn.
+ */
+export function Image(p: { src?: unknown; alt?: unknown; fit?: string; busy?: unknown; aspect?: unknown }) {
+  const src = str(p.src);
+  const [shown, setShown] = useState(src);
+  const [next, setNext] = useState<{ src: string; in: boolean } | null>(null);
+  useEffect(() => {
+    if (src !== shown && src !== next?.src) setNext(src ? { src, in: false } : null);
+  }, [src, shown, next?.src]);
+  // finish on a timer, not transitionend: a picture that loads within the same frame never transitions
+  useEffect(() => {
+    if (!next?.in) return;
+    const t = setTimeout(() => (setShown(next.src), setNext(null)), FADE_MS + 50);
+    return () => clearTimeout(t);
+  }, [next]);
+  const fadeIn = () => {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return next && (setShown(next.src), setNext(null));
+    // two frames so the browser has painted it at opacity 0 before it fades in
+    requestAnimationFrame(() => requestAnimationFrame(() => setNext((n) => (n ? { ...n, in: true } : n))));
+  };
+  const fit = { objectFit: p.fit === "contain" ? "contain" : "cover" } as const;
+  const ratio = /^\d+:\d+$/.test(str(p.aspect)) ? str(p.aspect).replace(":", " / ") : undefined;
+  const busy = !!p.busy;
+  if (!shown && !next) return <div className={`c-img c-img-empty ${busy ? "shimmer" : ""}`} style={{ aspectRatio: ratio ?? "1 / 1" }}>{busy && <span className="c-img-busy">Drawing…</span>}</div>;
+  return (
+    <div className="c-img-wrap">
+      {shown && <img className="c-img" src={shown} alt={str(p.alt)} style={fit} />}
+      {next && (
+        <img
+          className={`c-img c-img-next ${next.in ? "in" : ""} ${shown ? "" : "first"}`}
+          src={next.src}
+          alt={str(p.alt)}
+          style={fit}
+          onLoad={fadeIn}
+        />
+      )}
+      {busy && shown && <span className="c-img-busy veil">Drawing…</span>}
+    </div>
+  );
 }
 
 const LINK_ICON: Record<string, string> = { maps: "🗺️", tel: "📞", mailto: "✉️", web: "↗" };
