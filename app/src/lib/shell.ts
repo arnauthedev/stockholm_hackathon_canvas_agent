@@ -24,7 +24,7 @@ export function initMacShell() {
   let editing = false;
   const post = () => {
     const s = useStore.getState();
-    bridge()?.postMessage({ type: "state", connected: s.connected, live: s.voiceLive, editing, visibility: document.visibilityState });
+    bridge()?.postMessage({ type: "state", connected: s.connected, live: s.voiceLive, editing, handlesEsc: true, visibility: document.visibilityState });
   };
   document.addEventListener("visibilitychange", post);
   window.addEventListener("shell:folded", (e) => setShellVisible(!(e as CustomEvent<boolean>).detail));
@@ -39,6 +39,13 @@ export function initMacShell() {
     if (!isField(e.target)) return;
     editing = false;
     post();
+  });
+  // Escape: a sheet or the canvas closes itself (their own listeners run after this one, so the check sees
+  // the state before they act); with nothing open, the panel folds. Old shells intercept Esc natively instead.
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (document.querySelector(".sheet-backdrop") || useStore.getState().canvasOpen) return;
+    bridge()?.postMessage({ type: "fold" });
   });
   let was = { connected: false, live: false };
   let droppedAt = 0;

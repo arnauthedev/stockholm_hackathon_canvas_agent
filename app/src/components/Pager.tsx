@@ -3,10 +3,15 @@ import { useStore } from "../lib/store.ts";
 
 const PULL_TALK = 90; // px pulled down on a home screen to start talking
 const SWIPE_OPEN = 60; // px swiped up on a home screen to bring the canvas in
+const ARRIVE_MS = 900; // longer than any browser's smooth scroll
+
+const inField = (t: EventTarget | null) =>
+  t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLElement && t.isContentEditable);
 
 /**
  * Home screens: a full-screen horizontal pager with CSS scroll-snap.
  * Vertical gestures: swipe up → canvas fades in; pull down → start a Talk call.
+ * With a keyboard (the Mac notch app, a desktop browser) ← → change screen.
  */
 export function Pager({ pages, onPullTalk }: { pages: { key: string; label: string; node: ReactNode }[]; onPullTalk(): void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -14,6 +19,7 @@ export function Pager({ pages, onPullTalk }: { pages: { key: string; label: stri
   const editMode = useStore((s) => s.editMode);
   const set = useStore((s) => s.set);
   const fromScroll = useRef(false);
+  const gliding = useRef(false); // a dot click or key is scrolling: ignore the scroll events it causes
   const touch = useRef<{ x: number; y: number; top: boolean; bottom: boolean; axis: "x" | "y" | null } | null>(null);
   const [pull, setPull] = useState(0); // 0‥1 progress of a pull-to-talk; ≥1 = release to talk
 
@@ -25,8 +31,49 @@ export function Pager({ pages, onPullTalk }: { pages: { key: string; label: stri
       fromScroll.current = false;
       return;
     }
-    el.scrollTo({ left: page * el.clientWidth, behavior: "smooth" });
+    const left = page * el.clientWidth;
+    if (Math.abs(el.scrollLeft - left) < 1.5) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.scrollLeft = left;
+      return;
+    }
+    // Snapping is off while the scroll animates: WebKit (Safari, the notch app's web view) can snap a smooth
+    // programmatic scroll straight back to where it started, which made a click on a dot look dead.
+    gliding.current = true;
+    el.classList.add("gliding");
+    let timer = 0;
+    const done = () => {
+      clearTimeout(timer);
+      el.removeEventListener("scroll", check);
+      gliding.current = false;
+      el.classList.remove("gliding");
+    };
+    const check = () => {
+      if (Math.abs(el.scrollLeft - left) < 1.5) done();
+    };
+    timer = window.setTimeout(() => {
+      done();
+      if (Math.abs(el.scrollLeft - left) > 1.5) el.scrollLeft = left; // never arrived: jump
+    }, ARRIVE_MS);
+    el.addEventListener("scroll", check);
+    el.scrollTo({ left, behavior: "smooth" });
+    return done; // a new page before arrival: the next glide takes over from wherever this one is
   }, [page]);
+
+  // ← → change screen (Mac notch app, desktop): not while typing, with the canvas or a sheet open, or in edit mode
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== "ArrowLeft" && e.key !== "ArrowRight") || e.metaKey || e.ctrlKey || e.altKey || inField(e.target)) return;
+      const s = useStore.getState();
+      if (s.canvasOpen || s.editMode || document.querySelector(".sheet-backdrop")) return;
+      const next = s.page + (e.key === "ArrowRight" ? 1 : -1);
+      if (next < 0 || next >= pages.length) return;
+      e.preventDefault();
+      s.set({ page: next });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pages.length]);
 
   // initial position without animation
   useEffect(() => {
@@ -36,7 +83,7 @@ export function Pager({ pages, onPullTalk }: { pages: { key: string; label: stri
 
   const onScroll = () => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || gliding.current) return;
     const i = Math.round(el.scrollLeft / el.clientWidth);
     if (i !== useStore.getState().page) {
       fromScroll.current = true;
@@ -88,7 +135,7 @@ export function Pager({ pages, onPullTalk }: { pages: { key: string; label: stri
       </div>
       <nav className="dots" aria-label="Screens">
         {pages.map((p, i) => (
-          <button key={p.key} className={i === page ? "dot on" : "dot"} aria-label={p.label} onClick={() => set({ page: i })} />
+          <button key={p.key} className={i === page ? "dot on" : "dot"} aria-label={p.label} title={p.label} aria-current={i === page ? "page" : undefined} onClick={() => set({ page: i })} />
         ))}
       </nav>
       {pull > 0 && (

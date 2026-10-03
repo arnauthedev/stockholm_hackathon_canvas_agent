@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.ts";
 import { useStore } from "../lib/store.ts";
+import { useEscape } from "./Overlay.tsx";
 
 import { setTextSessionId, textSessionId } from "../lib/session.ts";
 
@@ -11,6 +12,7 @@ export function TextSheet({ open, onClose }: { open: boolean; onClose(): void })
   useEffect(() => {
     if (open) setTimeout(() => input.current?.focus(), 50);
   }, [open]);
+  useEscape(open ? onClose : null);
   if (!open) return null;
   const send = async () => {
     const t = text.trim();
