@@ -43,7 +43,7 @@ const BYTES_PER_MS = 48; // PCM16 mono 24 kHz
 const VISION_NOTE = `
 
 ## Live vision
-The user started this call from the camera button: the phone streams its rear camera to you, about one frame a second, for the whole call. When they ask about what they are showing, describe or act on what is in the latest frames, and say so if the image is too dark or blurry to tell.`;
+The user started this call from the camera button: the phone streams its rear camera to you, about one frame a second, for the whole call, and the user keeps moving it. Always answer from the MOST RECENT frames: what was in view earlier may be gone, so never describe an earlier scene as if it were still there. If the latest image is too dark or blurry to tell, say so.`;
 
 let _ai: GoogleGenAI | null = null;
 const ai = () => (_ai ??= new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }));
@@ -127,6 +127,9 @@ class GeminiLiveSession extends VoiceCore {
   private reconnects = 0;
   private closing = false;
   private readonly extended: boolean;
+  // Camera frames this call: the spread of (arrival − phone timestamp) shows queueing on the way here,
+  // independent of the clock offset between phone and runner.
+  private video = { frames: 0, bytes: 0, lastAt: 0, maxGap: 0, minLag: Infinity, maxLag: -Infinity };
 
   constructor(
     id: string,
@@ -205,7 +208,7 @@ class GeminiLiveSession extends VoiceCore {
         this.session?.sendRealtimeInput({ audio: { data: buf.toString("base64"), mimeType: "audio/pcm;rate=16000" } });
         return;
       }
-      let m: { type?: string; data?: string };
+      let m: { type?: string; data?: string; t?: number };
       try {
         m = JSON.parse(String(raw)) as typeof m;
       } catch {
@@ -213,7 +216,10 @@ class GeminiLiveSession extends VoiceCore {
       }
       switch (m.type) {
         case "video":
-          if (m.data) this.session?.sendRealtimeInput({ video: { data: m.data, mimeType: "image/jpeg" } });
+          if (m.data) {
+            this.session?.sendRealtimeInput({ video: { data: m.data, mimeType: "image/jpeg" } });
+            this.trackFrame(m.data.length, m.t);
+          }
           break;
         case "audio_end":
           this.session?.sendRealtimeInput({ audioStreamEnd: true });
@@ -369,6 +375,30 @@ class GeminiLiveSession extends VoiceCore {
     this.playbackEndsAt = this.lastOutputAt = Date.now();
     this.flush("agent");
     this.sendSilent("The user tapped stop while you were speaking; they did not hear the rest. Wait for them.");
+  }
+
+  private trackFrame(len: number, sentAt?: number) {
+    const v = this.video;
+    const now = Date.now();
+    v.frames++;
+    v.bytes += len;
+    if (v.lastAt) v.maxGap = Math.max(v.maxGap, now - v.lastAt);
+    v.lastAt = now;
+    if (typeof sentAt === "number") {
+      v.minLag = Math.min(v.minLag, now - sentAt);
+      v.maxLag = Math.max(v.maxLag, now - sentAt);
+    }
+  }
+
+  protected override finish() {
+    const v = this.video;
+    if (v.frames) {
+      const stats = { frames: v.frames, avg_kb: Math.round(v.bytes / v.frames / 1024), max_gap_ms: v.maxGap, delay_spread_ms: v.maxLag >= v.minLag ? v.maxLag - v.minLag : null };
+      console.log(`[voice] gemini ${this.id} video: ${stats.frames} frames, ~${stats.avg_kb} KB each, longest gap ${stats.max_gap_ms} ms, delay spread ${stats.delay_spread_ms ?? "?"} ms`);
+      void logSession(this.id, { type: "video", ...stats });
+      v.frames = 0; // finish() can run twice (phone close + grace timer): report once
+    }
+    super.finish();
   }
 
   /** Tell the phone, end the call, and drop the session even if Gemini never says goodbye. */

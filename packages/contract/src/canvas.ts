@@ -79,15 +79,35 @@ export const CanvasSpec = z.object({
 });
 export type CanvasSpec = z.infer<typeof CanvasSpec>;
 
+/** Container children as stored, or — a common model slip (Gemini Live) — put inside props. */
+export const childIds = (c: { children?: unknown; props?: Record<string, unknown> }): string[] =>
+  (Array.isArray(c.children) ? c.children : Array.isArray(c.props?.children) ? c.props.children : []).filter((x): x is string => typeof x === "string");
+
+/** Moves `props.children` up to `children` so a slipped spec renders instead of an empty container. */
+function normalizeSpec(input: unknown): unknown {
+  const comps = (input as { components?: unknown } | null)?.components;
+  if (!comps || typeof comps !== "object") return input;
+  const fixed: Record<string, unknown> = {};
+  for (const [id, raw] of Object.entries(comps as Record<string, unknown>)) {
+    const c = raw as { children?: unknown; props?: Record<string, unknown> } | null;
+    if (c && typeof c === "object" && c.children === undefined && Array.isArray(c.props?.children)) {
+      const { children, ...props } = c.props;
+      fixed[id] = { ...c, props, children };
+    } else fixed[id] = raw;
+  }
+  return { ...(input as object), components: fixed };
+}
+
 /** Structural + per-type validation. Unknown types are allowed (rendered as "unsupported"). */
 export function validateSpec(input: unknown): { ok: true; spec: CanvasSpec } | { ok: false; errors: string[] } {
-  const parsed = CanvasSpec.safeParse(input);
+  const parsed = CanvasSpec.safeParse(normalizeSpec(input));
   if (!parsed.success) return { ok: false, errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };
   const spec = parsed.data;
   const errors: string[] = [];
   if (!spec.components[spec.root]) errors.push(`root "${spec.root}" is not in components`);
   for (const [id, c] of Object.entries(spec.components)) {
     for (const child of c.children ?? []) if (!spec.components[child]) errors.push(`${id}.children: unknown id "${child}"`);
+    if ((c.type === "Column" || c.type === "Row") && !c.children?.length) errors.push(`${id} (${c.type}) has no children: list them in "children" on the component, next to "type"`);
     const schema = (ComponentProps as Record<string, z.ZodTypeAny>)[c.type];
     if (!schema) continue;
     const r = schema.safeParse(c.props ?? {});

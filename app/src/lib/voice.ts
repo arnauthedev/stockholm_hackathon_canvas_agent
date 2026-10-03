@@ -178,6 +178,7 @@ const PLAY_MIN = 0.03; // a chunk arriving with less headroom than this restarts
 // which no browser echo canceller guarantees on a speakerphone; each false start cut the reply and the
 // model answered its own words. While agent audio plays, mic chunks quieter than GATE_DB go out as
 // silence; a chunk above it (the user talking over the agent) opens the mic for a while.
+const FRAME_BACKLOG = 32 * 1024; // bytes still unsent on the socket above which a camera frame is skipped
 const GATE_TAIL = 0.35; // s after the last scheduled agent sample during which the gate still applies (acoustic + canceller tail)
 const GATE_OPEN_MS = 400; // once the user is clearly heard over the agent, keep the mic open this long
 const GATE_DB = -26; // dBFS RMS a mic chunk must reach while the agent plays; tune on the device: localStorage.voiceGateDb = "-20"
@@ -246,6 +247,7 @@ class RelayVoice {
   private out: AudioNode; // where agent audio goes: the loopback (echo-cancelled) or, failing that, the speakers
   private loopback: { close(): void } | null = null;
   private done = false;
+  private framesSkipped = 0;
   sessionId: string | null = null;
   onState: (s: VoiceState, err?: string) => void = () => {};
 
@@ -378,8 +380,17 @@ class RelayVoice {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(e));
   }
 
+  /**
+   * A camera frame, skipped while the socket still holds unsent data: on a slow uplink queued frames
+   * (and the audio behind them) would arrive later and later, and the model would describe the past.
+   */
   sendFrame(jpeg: string) {
-    this.send({ type: "video", data: jpeg });
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    if (this.ws.bufferedAmount > FRAME_BACKLOG) {
+      if (++this.framesSkipped % 10 === 1) console.warn(`[voice] slow uplink: ${this.framesSkipped} camera frames skipped (${this.ws.bufferedAmount} B queued)`);
+      return;
+    }
+    this.ws.send(JSON.stringify({ type: "video", data: jpeg, t: Date.now() }));
   }
 
   /** Stop the agent talking right now: drop queued audio and tell the session. */

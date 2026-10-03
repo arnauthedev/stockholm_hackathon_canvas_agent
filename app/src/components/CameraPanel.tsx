@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { useStore } from "../lib/store.ts";
 
 const FRAME_EVERY = 1000; // ms; Gemini Live wants about one frame a second
-const FRAME_MAX = 512; // px on the long side (media resolution is low on the server anyway)
+const FRAME_MAX = 384; // px on the long side: the server asks for low media resolution, so more is wasted uplink
+const FRAME_QUALITY = 0.5;
 
 /** Live camera during a Gemini call: a small preview, one JPEG frame a second to the voice session. */
 export function CameraPanel({ send, onClose }: { send(jpeg: string): void; onClose(): void }) {
@@ -27,13 +28,18 @@ export function CameraPanel({ send, onClose }: { send(jpeg: string): void; onClo
       const v = video.current;
       v.srcObject = stream;
       await v.play().catch(() => {});
+      let last = "";
       timer = window.setInterval(() => {
         if (!v.videoWidth) return;
+        // iOS can pause a small preview (e.g. after the app was in the background): the frames would freeze
+        if (v.paused) void v.play().catch(() => {});
         const k = Math.min(1, FRAME_MAX / Math.max(v.videoWidth, v.videoHeight));
         canvas.width = Math.round(v.videoWidth * k);
         canvas.height = Math.round(v.videoHeight * k);
         canvas.getContext("2d")!.drawImage(v, 0, 0, canvas.width, canvas.height);
-        const url = canvas.toDataURL("image/jpeg", 0.6);
+        const url = canvas.toDataURL("image/jpeg", FRAME_QUALITY);
+        if (url === last) return; // a live camera never repeats a frame exactly: the preview is frozen, don't resend it
+        last = url;
         send(url.slice(url.indexOf(",") + 1));
       }, FRAME_EVERY);
     })();

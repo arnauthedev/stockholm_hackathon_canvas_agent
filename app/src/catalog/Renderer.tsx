@@ -1,5 +1,5 @@
 import { Component as ReactComponent, type ReactNode } from "react";
-import { resolveProps, type CanvasSpec } from "@canvas-agent/contract";
+import { childIds, resolveProps, type CanvasSpec } from "@canvas-agent/contract";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { CardStack } from "./CardStack.tsx";
 import { Chart } from "./Chart.tsx";
@@ -27,7 +27,7 @@ function Node({ id, spec, data, seen }: { id: string; spec: CanvasSpec; data: un
   if (seen.has(id)) return <div className="c-unsupported">cycle: {id}</div>;
   const next = new Set(seen).add(id);
   const p: AnyProps = resolveProps(c.props, data);
-  const kids = (c.children ?? []).map((cid) => <Node key={cid} id={cid} spec={spec} data={data} seen={next} />);
+  const kids = childIds(c).map((cid) => <Node key={cid} id={cid} spec={spec} data={data} seen={next} />);
   let el: ReactNode;
   switch (c.type) {
     case "Column":
