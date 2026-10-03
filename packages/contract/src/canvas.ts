@@ -47,6 +47,7 @@ export const ComponentProps = {
   ApprovalCard: z.object({
     title: b(z.string()), body: b(z.string()), fields: b(z.array(ApprovalField)).optional(),
     actions: b(z.array(z.enum(["accept", "modify", "reject"]))).optional(),
+    accept_label: b(z.string()).optional(),
   }),
   TaskList: z.object({ tasks: b(z.array(TaskListItem)) }),
   Form: z.object({ fields: b(z.array(FormField)), submit: b(z.string()).optional() }),

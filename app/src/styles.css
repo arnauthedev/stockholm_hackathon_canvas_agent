@@ -147,7 +147,13 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
 .c-approval { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .c-approval-title { font-size: 20px; font-weight: 700; }
 .c-approval-body { color: var(--text); }
-.c-approval-actions { display: flex; gap: 10px; } .c-approval-actions .btn { flex: 1; }
+.c-approval-actions { display: flex; gap: 10px; justify-content: space-between; align-items: center; position: sticky; bottom: -18px; background: var(--surface); padding: 10px 0 2px; margin-top: 2px; }
+.c-approval-actions .btn { flex: 1; max-width: 48%; }
+.c-approval-actions .btn.reject { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.c-approval-actions.commit { background: color-mix(in srgb, var(--success) 14%, var(--surface)); border-radius: 12px; padding: 8px 8px 8px 14px; }
+.c-approval-commit-text { font-weight: 650; color: var(--success); }
+.c-approval-hint { font-size: 13px; color: var(--muted); margin-top: -6px; }
+.c-field.long textarea { min-height: 110px; resize: vertical; line-height: 1.4; }
 .c-approval-done { text-align: center; font-weight: 700; color: var(--success); padding: 10px; }
 .md-li { padding-left: 4px; }
 

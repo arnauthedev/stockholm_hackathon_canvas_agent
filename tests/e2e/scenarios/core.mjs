@@ -209,6 +209,66 @@ export default [
     },
   },
 
+  {
+    name: "tool: binance stream updates live; pin keeps streaming; alert fires once; unpin stops",
+    tags: ["tool"],
+    async run({ home }) {
+      const r = await tool("render", { title: "BTC", spec: { root: "m", components: { m: { type: "Metric", props: { label: "BTC", value: { $bind: "/price" }, unit: { $bind: "/currency" }, delta: { $bind: "/change_pct" }, trend: { $bind: "/trend" } } } } }, data: {}, source: { type: "stream", provider: "binance", symbol: "BTCUSDT" } });
+      const file = homeFile(home, `canvas/${r.canvas_id}/data.json`);
+      const seen = new Set();
+      const t0 = Date.now();
+      while (Date.now() - t0 < 6000) {
+        const d = readJsonSafe(file);
+        if (d?.updated_at) seen.add(d.updated_at);
+        await sleep(250);
+      }
+      const d = readJsonSafe(file);
+      const pin = await tool("pin", { slug: "btc" });
+      const w = await tool("watch", { target: "btc", path: "/price", op: ">", value: 1, message: "BTC above 1" });
+      // the pinned widget opens its own connection (Binance can take ~3 s to send the first message)
+      await waitFor(async () => ((await api("/api/monitor")).activity ?? []).some((a) => a.title === "alert fired: BTC"), { timeout: 10_000, label: "alert" }).catch(() => {});
+      await sleep(2500); // and it must not fire again while it stays true
+      const fired = ((await api("/api/monitor")).activity ?? []).filter((a) => a.title === "alert fired: BTC").length;
+      const jobs1 = (await api("/api/monitor")).jobs.map((j) => j.key);
+      await tool("unpin", { app_id: "btc" });
+      await sleep(500);
+      const jobs2 = (await api("/api/monitor")).jobs.map((j) => j.key);
+      const ok = seen.size >= 4 && typeof d.price === "number" && /%$/.test(d.change_pct) && pin.live && w.ok && fired === 1 && jobs1.includes("app:btc") && !jobs2.includes("app:btc");
+      return { pass: ok, info: `updates in 6s=${seen.size} price=${d.price} ${d.change_pct} alertFired=${fired} jobs before/after unpin=${jobs1.join(",")} / ${jobs2.join(",")}` };
+    },
+  },
+  {
+    name: "tool: http source polls every 5 s",
+    tags: ["tool"],
+    async run({ home }) {
+      const r = await tool("render", { title: "BTC http", spec: { root: "m", components: { m: { type: "Metric", props: { label: "BTC", value: { $bind: "/price" } } } } }, data: {}, source: { type: "http", url: "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", refresh_s: 5 } });
+      const file = homeFile(home, `canvas/${r.canvas_id}/data.json`);
+      const first = readJsonSafe(file)?.updated_at;
+      await sleep(11_500);
+      const runs = (await api("/api/monitor")).jobs.find((j) => j.key === `canvas:${r.canvas_id}`)?.runs ?? 0;
+      const d = readJsonSafe(file);
+      return { pass: runs >= 2 && d.updated_at !== first && !!d.price, info: `runs in 11.5s=${runs} price=${d.price}` };
+    },
+  },
+  {
+    name: "ui: streamed price changes on the phone in real time",
+    tags: ["ui"],
+    async run() {
+      await tool("render", { title: "BTC", spec: { root: "m", components: { m: { type: "Metric", props: { label: "BTC", value: { $bind: "/price" }, unit: { $bind: "/currency" }, delta: { $bind: "/change_pct" }, trend: { $bind: "/trend" } } } } }, data: {}, source: { type: "stream", provider: "binance", symbol: "BTCUSDT" } });
+      const p = await phone();
+      try {
+        await p.page.waitForSelector(".c-metric-value");
+        const n0 = p.events.length;
+        await sleep(5000);
+        const updates = p.events.slice(n0).filter((e) => e.type === "canvas").length;
+        const text = await p.page.locator(".c-metric-value").textContent();
+        return { pass: updates >= 4 && /\d/.test(text), info: `canvas updates in 5s=${updates} shown=${text}` };
+      } finally {
+        await p.close();
+      }
+    },
+  },
+
   // ---------------- text brain ----------------
   {
     name: "text: quick question → no task",
@@ -355,6 +415,18 @@ export default [
     },
   },
 
+  {
+    name: "text: 'Bitcoin price in real time' uses a stream",
+    tags: ["text"],
+    async run() {
+      await chat("Show me the Bitcoin price in real time", "e2e-stream");
+      const c = await tool("get_state", { scope: "canvas" });
+      const id = c.canvas?.id;
+      const job = (await api("/api/monitor")).jobs.find((j) => j.key === `canvas:${id}`);
+      return { pass: !!job && /binance/.test(job.source), info: `canvas=${c.canvas?.title} job=${job?.key} source=${job?.source}` };
+    },
+  },
+
   // ---------------- UI ----------------
   {
     name: "ui: card stack done/later survives re-render + reload, collapses",
@@ -398,11 +470,11 @@ export default [
         await page.waitForSelector(".sheet .c-approval-title");
         const ed = await tool("resolve_approval", { action: "edit", fields: { body: "Dinner at 9" } });
         await sleep(500);
-        const shown = await page.locator(".sheet .c-field-value").allTextContents();
+        const shown = await page.locator(".sheet .c-field input, .sheet .c-field textarea").evaluateAll((els) => els.map((e) => e.value));
         const priv = await tool("resolve_approval", { action: "edit", fields: { to: "x@y.z" } });
         await tool("resolve_approval", { action: "accept" });
-        await page.waitForSelector(".c-approval-commit", { timeout: 3000 });
-        await page.locator(".c-approval-commit .btn").tap();
+        await page.waitForSelector(".c-approval-actions.commit", { timeout: 3000 });
+        await page.locator(".c-approval-actions.commit .btn").tap();
         await sleep(6500);
         const stillPending = (await api("/api/state")).approvals.length;
         await tool("resolve_approval", { action: "reject" });
@@ -444,6 +516,34 @@ export default [
         await page.locator(".screen-top .chip").first().click();
         const ok = m1.size === "W" && m1.locked && m2.y === 4 && m2.x === 0 && m2.locked && !p.errors.length;
         return { pass: ok, info: `m1=${JSON.stringify(m1)} m2=${JSON.stringify(m2)} errors=${p.errors.length}` };
+      } finally {
+        await p.close();
+      }
+    },
+  },
+  {
+    name: "ui: approval card is editable at once, no duplicate text, ✕ left / ✓ right, edits are sent",
+    tags: ["ui"],
+    async run() {
+      const p = await phone();
+      try {
+        const { page } = p;
+        const sent = [];
+        page.on("websocket", (ws) => ws.on("framesent", (f) => { try { const e = JSON.parse(f.payload); if (e.type === "ui.event") sent.push(e); } catch {} }));
+        await page.reload();
+        await page.waitForSelector(".conn.ok");
+        await tool("ask_approval", { card: { title: "Email Mark?", body: "Sends from your email account as shown.", accept_label: "Send", fields: [{ name: "to", label: "To", value: "mark@example.com", editable: true }, { name: "subject", label: "Subject", value: "Dinner", editable: true }, { name: "body", label: "Message", value: "See you at 8", editable: true }] } });
+        await page.waitForSelector(".sheet textarea");
+        const modify = await page.locator(".sheet .btn", { hasText: "Modify" }).count();
+        const sheetText = await page.locator(".sheet").innerText();
+        const dup = (sheetText.match(/See you at 8/g) ?? []).length; // textarea values aren't in innerText: should be 0
+        const btns = await page.locator(".sheet .c-approval-actions .btn").allTextContents();
+        await page.locator(".sheet textarea").fill("See you at 9 instead");
+        await page.locator(".sheet .btn.accept").tap();
+        await sleep(600);
+        const ev = sent.find((e) => e.event.startsWith("approval."));
+        const ok = modify === 0 && dup === 0 && /Reject/.test(btns[0] ?? "") && /Send/.test(btns[btns.length - 1] ?? "") && ev?.event === "approval.modify" && ev.payload?.fields?.body === "See you at 9 instead";
+        return { pass: ok, info: `modifyBtn=${modify} dupText=${dup} buttons=${JSON.stringify(btns)} sent=${ev?.event} body="${ev?.payload?.fields?.body}"` };
       } finally {
         await p.close();
       }
@@ -596,7 +696,8 @@ export default [
         await sleep(300);
         const pillFirst = (await page.locator(".approval-pill").count()) === 1 && (await page.locator(".sheet .c-approval-title").count()) === 0;
         const opened = await waitFor(async () => (await page.locator(".sheet .c-approval-title").count()) > 0, { timeout: 25_000, label: "sheet opens" }).then(() => Date.now()).catch(() => null);
-        const lastTalk = Math.max(...p.events.filter((e) => e.type === "transcript").map((e) => e.t), modal.t);
+        // speech before the sheet opened (speech that starts after it opened doesn't count)
+        const lastTalk = Math.max(...p.events.filter((e) => e.type === "transcript" && (!opened || e.t <= opened)).map((e) => e.t), modal.t);
         await stopVoice(page);
         const ok = pillFirst && !!opened && opened - lastTalk >= 3000;
         return { pass: ok, info: `pillFirst=${pillFirst} opened=${!!opened} quietBeforeOpen=${opened ? opened - lastTalk : "-"}ms` };

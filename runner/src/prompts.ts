@@ -43,6 +43,7 @@ export const TOOLS_GUIDE = `
 - Prefer one render call with complete data over several partial ones; avoid get_state unless you really need it (current state is below).
 - Numbers from the web (prices, rates, scores…): fetch_json for a JSON API, run_python for anything else (yfinance is installed; from canvas_lib import quote; print(quote("AAPL")) → {symbol, price, currency, change, change_pct, trend, delayed}).
 - Not every request needs the canvas: if the user just wants a quick fact, answering in words is fine. Use the canvas when seeing it helps (charts, comparisons, lists, anything to act on).
+- Live sources — pick by how fresh it must be: crypto prices in real time → make_live with {"type":"stream","provider":"binance","symbol":"BTCUSDT"} (public, no key; fields price, change_pct, change, trend, high, low, currency — bind the spec to those); a public JSON API → {"type":"http","url":…,"refresh_s":≥5}; stocks and anything needing Python → python every ≥30 s (yfinance is delayed and rate-limited; real-time stock data needs a paid/keyed provider — say so if asked for "real time" stocks).
 - "Make it live / real-time": the data on the CURRENT canvas starts refreshing right away (no pin needed); pinning later turns it into a widget that keeps refreshing on its own. Call make_live with a python source (refresh_s 30–60 for prices) whose code PRINTS ONE JSON OBJECT whose keys match the data the spec binds to (it is merge-patched into data.json). Example code:
     import json
     from canvas_lib import quote

@@ -69,7 +69,8 @@ async function runCall(d: Extract<ActionDesc, { type: "call" }>, hooks: ActionHo
   const o = await ask(
     {
       title: `Call ${name}?`,
-      body: d.reason ? `About: ${d.reason}` : "Tap Accept, then Call.",
+      accept_label: "Call",
+      body: d.reason ? `About: ${d.reason}` : "Call opens your phone's dialer.",
       fields: [{ name: "phone", label: "Number", value: phone, editable: true, private: true }],
       actions: ["accept", "reject"],
     },
@@ -108,7 +109,8 @@ async function runEmail(d: Extract<ActionDesc, { type: "email" }>, hooks: Action
   const o = await ask(
     {
       title: d.reply_to_uid != null ? `Reply to ${name}?` : `Email ${name}?`,
-      body: live ? "Accept sends it from your email account." : `Sending is off (${emailConfigured() ? "ENABLE_SIDE_EFFECTS=false" : "email not set up"}) — Accept saves the draft.`,
+      accept_label: live ? "Send" : "Save draft",
+      body: live ? "Sends from your email account as shown." : `Sending is off (${emailConfigured() ? "ENABLE_SIDE_EFFECTS=false" : "email not set up"}) — saved as a draft.`,
       fields: [
         { name: "to", label: "To", value: to, editable: true, private: true },
         { name: "subject", label: "Subject", value: subject, editable: true },

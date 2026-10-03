@@ -22,6 +22,7 @@ const ApprovalCardArg = z.object({
   body: z.string(),
   fields: z.array(ApprovalField).optional(),
   actions: z.array(z.enum(["accept", "modify", "reject"])).optional(),
+  accept_label: z.string().optional().describe("label of the ✓ button, e.g. Send, Book, Pay (default Accept)"),
 });
 
 export const ToolArgs = {
@@ -161,7 +162,7 @@ export const ToolDescriptions: Record<ToolName, string> = {
   resize_widget:
     "Change a pinned widget's size when the user asks ('make it bigger/wider/smaller/taller'). Others are rearranged to fit; it may move to the next screen if there's no room.",
   make_live:
-    "Make a canvas or pinned app update itself on a schedule (refresh_s 30–86400). Python code must print a single JSON object (a merge patch for data.json) to stdout. Runs once immediately and reports.",
+    "Make a canvas or pinned app update itself. Sources: stream (real time, pushed ~1-2×/s: provider 'binance' + symbol like BTCUSDT for crypto, or any WebSocket url + field map), http (JSON URL polled every ≥5 s), python (code printing ONE JSON object, every ≥30 s; e.g. yfinance stocks). Runs once immediately and reports.",
   undo: "Show the previous canvas again.",
   create_tasks:
     "Create tasks from what the user asked. Find dependencies (depends_on). Independent tasks run in parallel in the background via sub-agents; you are told when each finishes.",
