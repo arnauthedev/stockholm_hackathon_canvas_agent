@@ -164,8 +164,25 @@ export async function phone({ micWav, persistentDir } = {}) {
   return { browser, context, page, errors, events, close: () => browser.close() };
 }
 
+/** The app opens on the home screens; the canvas (and the buttons) fade in over them. */
+export async function openCanvas(page) {
+  if (await page.locator(".canvas-layer.open").count()) return;
+  await page.click(".home-handle");
+  await page.waitForSelector(".canvas-layer.open");
+  await sleep(350); // fade-in
+}
+/** A vertical touch drag on the page (real touch events, so the app's gesture handlers see it). */
+export async function touchDrag(page, x, y0, y1) {
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type, y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+  await touch("touchStart", y0);
+  for (let i = 1; i <= 10; i++) await touch("touchMove", y0 + ((y1 - y0) * i) / 10);
+  await touch("touchEnd", y1);
+  await cdp.detach();
+}
 /** Start a voice session on the phone page and wait until live. */
 export async function startVoice(page) {
+  await openCanvas(page);
   await page.click(".talk-btn");
   await page.waitForFunction(() => document.querySelector(".talk-btn")?.classList.contains("live"), null, { timeout: 20_000 });
 }

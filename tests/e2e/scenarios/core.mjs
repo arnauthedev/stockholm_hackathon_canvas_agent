@@ -2,7 +2,7 @@
 // Tags: tool (deterministic, no LLM), text (text brain), ui (browser), email, voice (TTS mic, slowest).
 import path from "node:path";
 import fs from "node:fs/promises";
-import { api, chat, finals, homeFile, phone, readJsonSafe, sleep, speechWav, startVoice, stopVoice, tool, waitFor } from "../lib.mjs";
+import { api, chat, finals, homeFile, openCanvas, phone, readJsonSafe, sleep, speechWav, startVoice, stopVoice, tool, touchDrag, waitFor } from "../lib.mjs";
 
 const listTasks = async (home) => {
   const dir = homeFile(home, "tasks");
@@ -126,7 +126,7 @@ export default [
       try {
         const bad = await tool("schedule", { when: { cron: "not a cron" }, action: { type: "notify", text: "x" } });
         const r = await tool("schedule", { when: { in_s: 3 }, action: { type: "notify", text: "Stretch now" }, label: "Stretch" });
-        await p.page.locator(".dot").nth(0).click();
+        await p.page.click('[aria-label^="Tasks"]');
         const listed = await p.page.waitForSelector(".scheduled li", { timeout: 3000 }).then(() => true).catch(() => false);
         const toast = await waitFor(async () => p.events.find((e) => e.type === "toast" && /Stretch now/.test(e.text)), { timeout: 8000, label: "toast" }).catch(() => null);
         await sleep(800);
@@ -146,6 +146,7 @@ export default [
       try {
         const tts = [];
         p.page.on("response", (r) => r.url().includes("/api/tts") && tts.push(r.status()));
+        await openCanvas(p.page);
         await p.page.locator(".side-btn").first().click(); // a tap unlocks audio
         await p.page.keyboard.press("Escape");
         await p.page.locator(".sheet-backdrop").click({ position: { x: 5, y: 5 } }).catch(() => {});
@@ -189,6 +190,8 @@ export default [
       const p1 = await phone();
       const p2 = await phone();
       try {
+        await openCanvas(p1.page);
+        await openCanvas(p2.page);
         await p1.page.waitForSelector(".c-check");
         const t0 = Date.now();
         await p1.page.locator(".c-check", { hasText: "Apples" }).tap();
@@ -198,6 +201,8 @@ export default [
         await sleep(500);
         const st = (await tool("read_widget", {})).widgets[0].state.items.join("|");
         await p1.page.reload();
+        await p1.page.waitForSelector(".conn.ok");
+        await openCanvas(p1.page);
         await p1.page.waitForSelector(".c-check");
         const afterReload = await p1.page.locator(".c-checklist li.done").count();
         const ok = tapMs < 400 && synced && st === "[x] Apples|[ ] Bread" && afterReload === 1 && !p1.errors.length;
@@ -257,6 +262,7 @@ export default [
       await tool("render", { title: "BTC", spec: { root: "m", components: { m: { type: "Metric", props: { label: "BTC", value: { $bind: "/price" }, unit: { $bind: "/currency" }, delta: { $bind: "/change_pct" }, trend: { $bind: "/trend" } } } } }, data: {}, source: { type: "stream", provider: "binance", symbol: "BTCUSDT" } });
       const p = await phone();
       try {
+        await openCanvas(p.page);
         await p.page.waitForSelector(".c-metric-value");
         const n0 = p.events.length;
         await sleep(5000);
@@ -436,6 +442,7 @@ export default [
       const p = await phone();
       try {
         const { page } = p;
+        await openCanvas(page);
         await page.waitForSelector(".c-card");
         await page.locator(".c-stack-actions .btn.success").tap();
         await sleep(400);
@@ -446,6 +453,8 @@ export default [
         await sleep(600);
         const left1 = await page.locator(".c-stack-count").textContent();
         await page.reload();
+        await page.waitForSelector(".conn.ok");
+        await openCanvas(page);
         await page.waitForSelector(".c-card");
         const left2 = await page.locator(".c-stack-count").textContent();
         for (let i = 0; i < 2; i++) {
@@ -496,7 +505,7 @@ export default [
       const p = await phone();
       try {
         const { page } = p;
-        await page.locator(".dot").nth(2).click();
+        await page.locator(".dot").nth(0).click();
         await sleep(700);
         await page.locator(".screen-top .chip").first().click();
         await page.waitForSelector(".widget.editing");
@@ -662,7 +671,57 @@ export default [
     },
   },
 
+  {
+    name: "ui: home ↔ canvas — swipe up fades the canvas in, pull down from its top fades it out",
+    tags: ["ui"],
+    async run() {
+      await tool("render", { title: "Hello", spec: { root: "m", components: { m: { type: "Metric", props: { label: "Hello", value: 1 } } } }, data: {} });
+      const p = await phone();
+      try {
+        const { page } = p;
+        const cls = () => page.evaluate(() => document.querySelector(".app").className);
+        const startsHome = /\bhome\b/.test(await cls()) && (await page.locator(".bottombar.away").count()) === 1;
+        await touchDrag(page, 190, 600, 400);
+        await sleep(450);
+        const opened = /canvas-open/.test(await cls()) && (await page.locator(".c-metric-value").isVisible()) && (await page.locator(".bottombar.away").count()) === 0;
+        await touchDrag(page, 190, 250, 450);
+        await sleep(450);
+        const closed = /\bhome\b/.test(await cls()) && !(await page.locator(".c-metric-value").isVisible());
+        await page.click(".home-handle");
+        await sleep(450);
+        const handle = /canvas-open/.test(await cls());
+        const ok = startsHome && opened && closed && handle && !p.errors.length;
+        return { pass: ok, info: `startsHome=${startsHome} swipeUp=${opened} pullDown=${closed} handle=${handle} errors=${p.errors.length}` };
+      } finally {
+        await p.close();
+      }
+    },
+  },
+
   // ---------------- voice (slowest; real GPT-Live) ----------------
+  {
+    name: "voice: pull down on home starts Talk; the canvas fades in when the agent answers",
+    tags: ["voice"],
+    async run() {
+      const wav = await speechWav("pull-talk", [4, "Hi! What is two plus two?", 25]);
+      const p = await phone({ micWav: wav });
+      try {
+        const { page } = p;
+        const cls = () => page.evaluate(() => document.querySelector(".app").className);
+        await touchDrag(page, 190, 250, 420);
+        const live = await page.waitForFunction(() => document.querySelector(".talk-btn")?.classList.contains("live"), null, { timeout: 20_000 }).then(() => true).catch(() => false);
+        const homeWhileListening = /\bhome\b/.test(await cls()) && (await page.locator(".bottombar.away").count()) === 0;
+        const answered = await waitFor(async () => finals(p.events, "agent").length > 0 || p.events.some((e) => e.type === "transcript" && e.role === "agent"), { timeout: 45_000, label: "agent answer" }).then(() => true).catch(() => false);
+        await sleep(500);
+        const canvasIn = /canvas-open/.test(await cls());
+        await stopVoice(page);
+        const ok = live && homeWhileListening && answered && canvasIn && !p.errors.length;
+        return { pass: ok, info: `live=${live} homeWhileListening=${homeWhileListening} answered=${answered} canvasIn=${canvasIn} errors=${p.errors.length}` };
+      } finally {
+        await p.close();
+      }
+    },
+  },
   {
     name: "voice: weather → chart while speaking",
     tags: ["voice"],
