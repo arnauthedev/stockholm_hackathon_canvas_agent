@@ -4,6 +4,7 @@ import { isMacShell } from "../lib/shell.ts";
 import { useStore } from "../lib/store.ts";
 import { InstallSetting } from "./InstallSetting.tsx";
 import { NotifyButton } from "./NotifyButton.tsx";
+import { SheetClose, useEscape } from "./Overlay.tsx";
 
 type TalkVoice = "openai" | "google";
 const TALK_OPTIONS: [TalkVoice, string][] = [
@@ -17,6 +18,7 @@ export function SettingsSheet({ onClose }: { onClose(): void }) {
   const [saving, setSaving] = useState(false);
   const fail = (err: unknown) => useStore.getState().toast({ text: `Settings: ${err instanceof Error ? err.message : String(err)}`, kind: "error" });
 
+  useEscape(onClose);
   useEffect(() => {
     api<{ talkVoice: TalkVoice }>("/api/settings").then((s) => setTalk(s.talkVoice), fail);
   }, []);
@@ -40,6 +42,7 @@ export function SettingsSheet({ onClose }: { onClose(): void }) {
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet settings-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
+        <SheetClose onClick={onClose} />
         <h2>Settings</h2>
         <div className="setting">
           <div className="setting-label">

@@ -48,7 +48,8 @@ final class NotchController: NSObject, WebPaneDelegate {
       monitors.append(m)
     }
     if let m = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] e in
-      guard let self, e.keyCode == 53, self.expanded else { return e }  // Esc folds
+      // Esc folds. A page that handles Esc itself gets it first and sends `fold` once nothing is open.
+      guard let self, e.keyCode == 53, self.expanded, !self.pane.state.handlesEsc else { return e }
       self.collapse()
       return nil
     }) {
@@ -180,6 +181,8 @@ final class NotchController: NSObject, WebPaneDelegate {
 
   /// Dialogs (file chooser, alerts) are ordinary windows: while one is up the panel steps down to their level so it cannot cover them.
   func webPane(_ pane: WebPane, modalOpen: Bool) { dialogOpen(modalOpen) }
+
+  func webPaneRequestsFold(_ pane: WebPane) { collapse() }
 
   func dialogOpen(_ open: Bool) {
     panel.level = open ? .normal : .screenSaver
