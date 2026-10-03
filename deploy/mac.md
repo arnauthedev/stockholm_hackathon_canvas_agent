@@ -21,13 +21,13 @@ or `scripts/dev.sh` printed. The field is prefilled when the link is on the clip
 ## Using it
 
 - **Folded**: a black pill around the notch with a dot. Green: connected. Red: runner unreachable. Pulsing: a call is live.
-- **Hover** opens the panel; moving away folds it. **Click** the pill to keep it open. **Esc** closes an open sheet or the canvas, and folds the panel when nothing is open; a click on the notch
-  strip, or a click anywhere else, folds it too. It stays open while you type or while a file chooser is up.
+- **Hover** opens the panel; moving away folds it. **Click** the pill to keep it open. **Esc**, a click on the notch
+  strip, or a click anywhere else folds it. It stays open while you type or while a file chooser is up.
 - **Menu bar icon**: Open / Fold, Reload, Open in Browser, Pair…, Quit.
 - **Talk / Live vision**: macOS asks for the microphone and camera the first time. The app is signed ad hoc, so it
   asks again after each rebuild.
 - **Photo** opens the standard file chooser.
-- **Trackpad**: swipe left and right between the screens, click the dots, or press **← →**. Tasks and Settings open as sheets with a ✕. Everything clickable shows a hand cursor.
+- **Trackpad**: swipe left and right between Tasks, Canvas and the Screens, or click the dots.
 - Links the agent opens go to your default browser.
 
 ## Limits

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { token } from "../lib/api.ts";
 import { setTextSessionId, textSessionId } from "../lib/session.ts";
 import { useStore } from "../lib/store.ts";
-import { useEscape } from "./Overlay.tsx";
 
 /** Downscale on the phone (max 1600 px JPEG) — faster upload, cheaper vision tokens. */
 async function downscale(file: File, max = 1600): Promise<Blob> {
@@ -30,7 +29,6 @@ export function PhotoSheet({ file, onClose }: { file: File | null; onClose(): vo
     setText("");
     return () => URL.revokeObjectURL(u);
   }, [file]);
-  useEscape(file ? onClose : null);
   if (!file) return null;
 
   const send = async () => {

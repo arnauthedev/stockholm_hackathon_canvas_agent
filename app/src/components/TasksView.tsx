@@ -5,7 +5,6 @@ import { openLink } from "../lib/links.ts";
 import { api } from "../lib/api.ts";
 import { callTool } from "../lib/api.ts";
 import type { TriggerJson } from "@canvas-agent/contract";
-import { SheetClose, useEscape } from "./Overlay.tsx";
 
 function when(t: TriggerJson, now: number) {
   if (t.source === "email") return "on new email";
@@ -102,17 +101,15 @@ export function TasksView() {
   );
 }
 
-/** Tasks open as a sheet from the top bar's tasks button; ✕, Escape or the backdrop close it. */
+/** Tasks open as a sheet from the top bar's tasks button. */
 export function TasksSheet() {
   const open = useStore((s) => s.tasksOpen);
-  const close = () => useStore.getState().set({ tasksOpen: false });
-  useEscape(open ? close : null);
   if (!open) return null;
+  const close = () => useStore.getState().set({ tasksOpen: false });
   return (
     <div className="sheet-backdrop" onClick={close}>
-      <div className="sheet tasks-sheet" role="dialog" aria-label="Tasks" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet tasks-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
-        <SheetClose onClick={close} />
         <TasksView />
       </div>
     </div>

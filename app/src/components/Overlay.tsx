@@ -4,25 +4,6 @@ import { openLink } from "../lib/links.ts";
 import { ApprovalCard } from "../catalog/ApprovalCard.tsx";
 import { Ctx } from "../catalog/context.ts";
 
-/** Sheets close on Escape. In the Mac notch app the shell leaves Escape to the page while something is open (lib/shell.ts). */
-export function useEscape(onClose: (() => void) | null) {
-  useEffect(() => {
-    if (!onClose) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      e.preventDefault();
-      onClose();
-    };
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
-  }, [onClose]);
-}
-
-/** The ✕ in a sheet's top-right corner: the way out when the sheet fills the screen and the backdrop is out of reach. */
-export function SheetClose({ onClick }: { onClick(): void }) {
-  return <button type="button" className="sheet-close" aria-label="Close" title="Close" onClick={onClick}>✕</button>;
-}
-
 export function Toasts() {
   const toasts = useStore((s) => s.toasts);
   return (

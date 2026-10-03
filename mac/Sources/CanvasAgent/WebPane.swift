@@ -6,8 +6,6 @@ protocol WebPaneDelegate: AnyObject {
   func webPane(_ pane: WebPane, stateChanged state: WebPane.State)
   /// A native dialog (file chooser, alert) opened or closed: the panel must not fold under it, nor cover it.
   func webPane(_ pane: WebPane, modalOpen: Bool)
-  /// The page got Esc with nothing of its own left to close: fold the panel.
-  func webPaneRequestsFold(_ pane: WebPane)
 }
 
 /// The web app inside the notch. A WKWebView with persistent storage (the pairing token lives in its
@@ -19,8 +17,6 @@ final class WebPane: NSView {
     var connected = false
     var live = false
     var editing = false
-    /// The page closes its sheets and canvas on Esc itself and sends `fold` otherwise; older pages leave Esc to the shell.
-    var handlesEsc = false
   }
 
   private(set) var state = State() {
@@ -109,15 +105,9 @@ final class WebPane: NSView {
 
 extension WebPane: WKScriptMessageHandler {
   func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
-    guard let d = m.body as? [String: Any], let type = d["type"] as? String else { return }
-    if type == "fold" {
-      delegate?.webPaneRequestsFold(self)
-      return
-    }
-    guard type == "state" else { return }
-    state = State(connected: d["connected"] as? Bool ?? false, live: d["live"] as? Bool ?? false, editing: d["editing"] as? Bool ?? false,
-                  handlesEsc: d["handlesEsc"] as? Bool ?? false)
-    NSLog("page state: connected=%d live=%d editing=%d handlesEsc=%d visibility=%@", state.connected, state.live, state.editing, state.handlesEsc, d["visibility"] as? String ?? "?")
+    guard let d = m.body as? [String: Any], d["type"] as? String == "state" else { return }
+    state = State(connected: d["connected"] as? Bool ?? false, live: d["live"] as? Bool ?? false, editing: d["editing"] as? Bool ?? false)
+    NSLog("page state: connected=%d live=%d editing=%d visibility=%@", state.connected, state.live, state.editing, d["visibility"] as? String ?? "?")
   }
 }
 

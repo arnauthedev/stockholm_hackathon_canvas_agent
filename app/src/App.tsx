@@ -137,21 +137,21 @@ function TopBar({ onSettings }: { onSettings(): void }) {
     <>
       <div className={connected ? "conn ok" : "conn"} title={connected ? "Connected" : "Offline"} />
       <div className="top-btns">
-        <button className="top-btn" aria-label="Settings" title="Settings" onClick={onSettings}>
+        <button className="top-btn" aria-label="Settings" onClick={onSettings}>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
             <circle cx="15" cy="7" r="2" />
             <circle cx="9" cy="17" r="2" />
           </svg>
         </button>
-        <button className="top-btn" aria-label={`Tasks${open ? `, ${open} open` : ""}`} title="Tasks" onClick={() => useStore.getState().set({ tasksOpen: true })}>
+        <button className="top-btn" aria-label={`Tasks${open ? `, ${open} open` : ""}`} onClick={() => useStore.getState().set({ tasksOpen: true })}>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="m3 6 2 2 3-3M3 16l2 2 3-3M12 7h9M12 17h9" />
           </svg>
           {open > 0 && <span className={`top-badge ${needsYou ? "alert" : ""}`}>{open}</span>}
         </button>
         {!coarse && (
-          <button className="top-btn" aria-label={canvasOpen ? "Back to screens" : "Open the canvas"} title={canvasOpen ? "Back to screens" : "Open the canvas"} aria-pressed={canvasOpen} onClick={() => useStore.getState().set({ canvasOpen: !canvasOpen })}>
+          <button className="top-btn" aria-label={canvasOpen ? "Back to screens" : "Open the canvas"} aria-pressed={canvasOpen} onClick={() => useStore.getState().set({ canvasOpen: !canvasOpen })}>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
               {canvasOpen ? <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" /> : <path d="M4 5h16v14H4zM8 9h8M8 13h5" />}
             </svg>
