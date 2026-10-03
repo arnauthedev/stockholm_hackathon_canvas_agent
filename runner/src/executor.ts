@@ -374,13 +374,15 @@ const handlers: { [N in ToolName]: Handler<N> } = {
     const rules = await readRules(id);
     const rule = {
       id: [slugify(a.path, 20), OP_NAMES[a.op], String(a.value ?? "").replace(/\W/g, "")].filter(Boolean).join("-"),
-      path: a.path, op: a.op, value: a.value, message: a.message, mode: a.mode ?? "cross", cooldown_s: a.cooldown_s ?? 0, created_at: now(),
+      path: a.path, op: a.op, value: a.value, message: a.message, mode: a.mode ?? "cross", cooldown_s: a.cooldown_s ?? 0,
+      notify: a.notify ?? true, task: a.task, created_at: now(),
     };
     await writeRules(id, [...rules.filter((r) => r.id !== rule.id), rule]);
     const current = resolvePointer(app.data, a.path);
     // without a live source the rule is checked whenever update_data changes the widget (e.g. a scheduled check)
     const checks = app.app.source ? `after every refresh (${app.app.refresh_s}s)` : "whenever update_data changes this widget — it has no live source, so schedule a recurring check that updates it (or make_live)";
-    return { ok: true, app_id: id, rule_id: rule.id, current_value: current ?? null, checks, pinned };
+    const does = [rule.notify ? "notify" : "", rule.task ? `run the task "${rule.task.title}"` : ""].filter(Boolean).join(" and ") || "nothing";
+    return { ok: true, app_id: id, rule_id: rule.id, current_value: current ?? null, checks, when_true: does, pinned };
   },
 
   async unwatch(a) {

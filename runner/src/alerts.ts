@@ -6,6 +6,7 @@ import { lock, now, readJson, writeJson } from "./fsutil.ts";
 import { record } from "./monitor.ts";
 import { pushAll } from "./push.ts";
 import { paths, readApp } from "./store.ts";
+import { tasksApi } from "./tasks-hook.ts";
 
 /**
  * Conditions on live widgets, evaluated by the runner after every refresh (no model calls).
@@ -56,10 +57,10 @@ export async function evaluateAlerts(appId: string, data: unknown, scriptAlerts:
     const rules = await readRules(appId);
     if (!rules.length && !scriptAlerts.length && !(await readJson(stateFile(appId)))) return;
     const st: AlertState = { active: {}, last_fired: {}, last_values: {}, ...((await readJson<AlertState>(stateFile(appId))) ?? {}) };
-    const trueNow = new Map<string, { message: string; title?: string; rule?: WatchRule }>();
+    const trueNow = new Map<string, { message: string; title?: string; rule?: WatchRule; value?: unknown }>();
     for (const rule of rules) {
       const v = resolvePointer(data, rule.path);
-      if (holds(rule, v, st.last_values[rule.id])) trueNow.set(rule.id, { message: rule.message.replace("{value}", String(v)), rule });
+      if (holds(rule, v, st.last_values[rule.id])) trueNow.set(rule.id, { message: rule.message.replace("{value}", String(v)), rule, value: v });
       st.last_values[rule.id] = v;
     }
     for (const a of scriptAlerts) if (a?.id && a.message) trueNow.set(`script:${a.id}`, { message: a.message, title: a.title });
@@ -73,7 +74,8 @@ export async function evaluateAlerts(appId: string, data: unknown, scriptAlerts:
       const last = st.last_fired[id] ? Date.parse(st.last_fired[id]) : 0;
       if (!wasActive && Date.now() - last >= cooldown) {
         st.last_fired[id] = now();
-        await fire(appId, title, id, a.title ?? title, a.message);
+        if (a.rule?.notify !== false) await fire(appId, title, id, a.title ?? title, a.message);
+        if (a.rule?.task) await runRuleTask(appId, title, a.rule, a.value);
         if (a.rule?.mode === "once") removeOnce.push(id);
       }
     }
@@ -82,6 +84,14 @@ export async function evaluateAlerts(appId: string, data: unknown, scriptAlerts:
     if (removeOnce.length) await writeRules(appId, rules.filter((r) => !removeOnce.includes(r.id)));
     await writeJson(stateFile(appId), st);
   });
+}
+
+/** A rule's action: a background task (redraw a picture, update a card…), started on the rising edge. */
+async function runRuleTask(appId: string, appTitle: string, rule: WatchRule, value: unknown) {
+  const t = rule.task!;
+  const details = `${t.details.replaceAll("{value}", String(value))}\n(Started automatically: on the "${appTitle}" widget, ${rule.path} ${rule.op} ${String(rule.value ?? "")} became true; the value is ${JSON.stringify(value)}.)`;
+  record({ kind: "job", title: `condition → task: ${appTitle}`, detail: `${t.title} (${rule.path}=${String(value).slice(0, 24)})`, ok: true, actor: `app:${appId}` });
+  await tasksApi.create({ tasks: [{ title: t.title, kind: t.kind ?? "background", details }] }, { actor: `watch:${appId}` }).catch((e: unknown) => console.warn("[alerts] task failed to start", e));
 }
 
 async function fire(appId: string, appTitle: string, ruleId: string, title: string, message: string) {

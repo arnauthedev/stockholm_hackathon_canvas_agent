@@ -154,6 +154,10 @@ export const WatchRule = z.object({
   message: z.string(),
   mode: z.enum(["cross", "once"]).default("cross"),
   cooldown_s: z.number().int().min(0).default(0),
+  /** false: no notification, only the task (a silent automatic change) */
+  notify: z.boolean().default(true),
+  /** a background task started each time the condition becomes true ({value} in details → the value) */
+  task: z.object({ title: z.string(), details: z.string(), kind: TaskKind.optional() }).optional(),
   created_at: z.string(),
 });
 export type WatchRule = z.infer<typeof WatchRule>;

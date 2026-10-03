@@ -123,8 +123,17 @@ export const ToolArgs = {
     op: WatchOp,
     value: z.union([z.number(), z.string(), z.boolean()]).optional().describe("Threshold (omit for 'changed')"),
     message: z.string().describe("Notification text, e.g. 'Apple dropped below $120'"),
-    mode: z.enum(["cross", "once"]).optional().describe("cross (default): notify each time it becomes true; once: notify once then remove"),
+    mode: z.enum(["cross", "once"]).optional().describe("cross (default): act each time it becomes true; once: act once then remove"),
     cooldown_s: z.number().int().min(0).optional(),
+    task: z
+      .object({
+        title: z.string(),
+        details: z.string().describe("everything the sub-agent needs, e.g. 'generate_image(target \"stockholm-picture\", prompt \"make it a rainy scene\")'; {value} becomes the value"),
+        kind: TaskKind.optional(),
+      })
+      .optional()
+      .describe("ALSO run this background task each time the condition becomes true: redraw a picture, update or redraw a card, prepare an email…"),
+    notify: z.boolean().optional().describe("send the notification (default true); false when the user only wants the automatic change"),
   }),
   unwatch: z.object({ target: z.string(), id: z.string().optional().describe("rule id; omit to remove all") }),
   schedule: z.object({
@@ -198,7 +207,7 @@ export const ToolDescriptions: Record<ToolName, string> = {
   send_email:
     "Send an email to a contact by NAME, or reply to a message from find_emails (reply_to_uid). The device fills in the address (asks if missing) and shows the full email for the user to accept/edit/reject; nothing is sent without approval. Returns immediately; the outcome is reported later.",
   watch:
-    "Notify the user (push notification + in-app) when a widget's value meets a condition: checked after every refresh of a live widget, or whenever update_data changes it (a scheduled check). A canvas is pinned first. For complex conditions instead write the fetch code so it prints `_alerts: [{id, message}]` for conditions currently true.",
+    "When a widget's value meets a condition: notify the user (push + in-app) and/or run a background task (task: redraw a picture, update a card…). Checked after every refresh of a live widget, or whenever update_data changes it (a scheduled check). A canvas is pinned first. For complex conditions instead write the fetch code so it prints `_alerts: [{id, message}]` for conditions currently true.",
   unwatch: "Remove a watch (condition) from a widget.",
   schedule:
     "Do something later or repeatedly: notify (push notification + toast), speak (said aloud if the user is in a voice call or has the app open; otherwise a notification), or task (run a background task). Persists across restarts.",
