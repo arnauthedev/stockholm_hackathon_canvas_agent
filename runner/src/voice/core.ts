@@ -87,9 +87,13 @@ export abstract class VoiceCore implements VoiceSession {
   /** Common wiring once the provider connection is up. */
   protected attach(models: Record<string, unknown>) {
     this.unregister = registerTarget({ kind: "voice", id: this.id, inject: (t) => this.inject(t) });
-    // One at a time, in the order the model asked: a render and the make_live/pin after it in the same
-    // batch must see the new canvas (in parallel, make_live without a target hit the previous one).
-    this.onToolCall((c) => (this.toolQueue = this.toolQueue.then(() => this.runTool(c)).catch(() => {})));
+    // Screen tools run one at a time in the order asked: a render and the make_live/pin after it in the
+    // same batch must see the new canvas (in parallel, make_live without a target hit the previous one).
+    // They take milliseconds; everything else (lookups, code, tasks) still runs at once, so nothing waits on them.
+    this.onToolCall((c) => {
+      if (!ORDERED_TOOLS.has(c.name)) return void this.runTool(c);
+      this.toolQueue = this.toolQueue.then(() => this.runTool(c)).catch(() => {});
+    });
     this.onTranscript((t) => {
       bus.emit({ type: "transcript", role: t.role, text: t.text, final: t.final, session_id: this.id });
       if (t.final) void logSession(this.id, { type: t.role, text: t.text });
@@ -296,6 +300,9 @@ function parseUnaddressed(text: string): string | null {
 }
 
 /** What an action did, for the coverage check: task titles in full, other args briefly. */
+/** Tools that read or change "the current canvas" (or widgets): order matters between them. */
+const ORDERED_TOOLS = new Set(["render", "update_data", "make_live", "pin", "unpin", "resize_widget", "undo", "watch", "unwatch", "ui_action"]);
+
 function actionSummary(name: string, args: unknown): string {
   const a = (args ?? {}) as Record<string, unknown>;
   if (name === "create_tasks" && Array.isArray(a.tasks)) return `create_tasks: ${(a.tasks as { title?: string }[]).map((t) => `"${t.title}"`).join(", ")}`;
