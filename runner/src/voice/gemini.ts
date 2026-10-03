@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
-import { Behavior, FunctionResponseScheduling, GoogleGenAI, MediaResolution, Modality, ThinkingLevel, type FunctionCall, type FunctionDeclaration, type LiveConnectConfig, type LiveServerMessage, type Session } from "@google/genai";
+import { Behavior, GoogleGenAI, MediaResolution, Modality, StartSensitivity, ThinkingLevel, type FunctionCall, type FunctionDeclaration, type LiveConnectConfig, type LiveServerMessage, type Session } from "@google/genai";
 import WebSocket, { WebSocketServer, type RawData } from "ws";
 import { helperDefs, toolDefs, TOOL_NAMES, type ToolDef, type VoiceSession } from "@canvas-agent/contract";
 import { route, type Route } from "../../../config/routes.ts";
@@ -16,8 +16,10 @@ import { T, VoiceCore, toolOutputText, voiceNameFor } from "./core.ts";
  * Gemini Live, runner half (B9). The runner owns the Gemini session and the phone only streams
  * audio to it over /voice (a WebSocket on the runner, RUNNER_TOKEN like /bus): keys and tools stay
  * here, and notices, facts, transcripts and the coverage check work as with GPT-Live. There is no
- * backend model: the Live model holds the whole tool set (NON_BLOCKING, so it keeps talking while
- * tools run) and Google Search.
+ * backend model: the Live model holds the whole tool set and Google Search. Tools are BLOCKING on
+ * gemini-3.8-live: every tool returns within ~1 s (slow work is create_tasks, which returns "started"),
+ * and with NON_BLOCKING + WHEN_IDLE the model sometimes never resumed after a result (30 s of silence
+ * on the phone). Extended thinking only supports NON_BLOCKING.
  *
  * Phone → runner: binary = PCM16 mono 16 kHz; JSON {type:"video", data} (JPEG base64, while the
  *   camera is open), {type:"audio_end"} (mic paused), {type:"interrupt"}, {type:"close"}.
@@ -60,15 +62,35 @@ async function createGeminiSession(phone: WebSocket) {
   }
 }
 
-/** Contract tool → Live function declaration (JSON schema as-is; async so speech never waits). */
-function fnDecl(d: ToolDef): FunctionDeclaration {
+/** Contract tool → Live function declaration (JSON schema as-is). */
+function fnDecl(d: ToolDef, behavior: Behavior): FunctionDeclaration {
   const { $schema: _s, ...parametersJsonSchema } = d.parameters as Record<string, unknown>;
-  return { name: d.name, description: d.description, behavior: Behavior.NON_BLOCKING, parametersJsonSchema };
+  return { name: d.name, description: d.description, behavior, parametersJsonSchema };
 }
 
 /** @effort on the route → thinking level (extended-thinking models only; MINIMAL is not supported there). */
 function thinkingLevel(effort: unknown): ThinkingLevel {
   return effort === "high" ? ThinkingLevel.HIGH : effort === "medium" ? ThinkingLevel.MEDIUM : ThinkingLevel.LOW;
+}
+
+/**
+ * Gemini quotes "$"-prefixed keys in function arguments ({"\"$bind\"": "/days"} instead of
+ * {"$bind": "/days"}), so every bound chart failed validation and the model retried (seconds each).
+ * Strip quotes wrapped around any key, and accept the two misplaced-root shapes the model produces.
+ */
+export function cleanArgs(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(cleanArgs);
+  if (!v || typeof v !== "object") return v;
+  const out: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(v)) out[k.replace(/^"(.*)"$/, "$1")] = cleanArgs(val);
+  const comps = out.components as Record<string, unknown> | undefined;
+  if (comps && typeof comps === "object" && out.root === undefined && "root" in comps) {
+    if (typeof comps.root === "string") {
+      out.root = comps.root; // {"components": {"root": "col", …}}: the root id ended up among the components
+      delete comps.root;
+    } else out.root = "root"; // the root container itself is keyed "root"
+  }
+  return out;
 }
 
 const asBuffer = (raw: RawData) => (Buffer.isBuffer(raw) ? raw : Array.isArray(raw) ? Buffer.concat(raw) : Buffer.from(raw));
@@ -97,7 +119,8 @@ class GeminiLiveSession extends VoiceCore {
   }
 
   async connect(_opts: Parameters<VoiceSession["connect"]>[0]) {
-    const declarations = [...toolDefs(TOOL_NAMES), ...helperDefs()].map(fnDecl);
+    const behavior = this.extended ? Behavior.NON_BLOCKING : Behavior.BLOCKING;
+    const declarations = [...toolDefs(TOOL_NAMES), ...helperDefs()].map((d) => fnDecl(d, behavior));
     this.config = {
       responseModalities: [Modality.AUDIO],
       systemInstruction: { parts: [{ text: await geminiInstructions() }] },
@@ -108,6 +131,8 @@ class GeminiLiveSession extends VoiceCore {
       contextWindowCompression: { slidingWindow: {} }, // calls longer than 15 min
       sessionResumption: {}, // handles for reconnecting
       mediaResolution: MediaResolution.MEDIA_RESOLUTION_LOW, // camera frames: enough for "what is this", cheap
+      // residual echo of the agent's own voice must not count as the user barging in (it cut its own sentences)
+      realtimeInputConfig: { automaticActivityDetection: { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW } },
       ...(this.extended ? { thinkingConfig: { thinkingLevel: thinkingLevel(this.cfg.voiceReasoning) } } : {}),
     };
     this.bindPhone(); // before the upstream connect: the phone starts streaming as soon as its socket opens
@@ -260,7 +285,7 @@ class GeminiLiveSession extends VoiceCore {
     for (const fc of calls) {
       if (!fc.id || !fc.name) continue;
       this.pending.set(fc.id, fc.name);
-      this.emitToolCall({ id: fc.id, name: fc.name, args: fc.args ?? {} });
+      this.emitToolCall({ id: fc.id, name: fc.name, args: cleanArgs(fc.args ?? {}) });
     }
   }
 
@@ -279,7 +304,7 @@ class GeminiLiveSession extends VoiceCore {
     const response: Record<string, unknown> = { result: text.length < 16_000 ? (result ?? {}) : text };
     if (fact) response.note = fact; // what is really on the screen, with the result it refers to
     this.session.sendToolResponse({
-      functionResponses: [{ id, name, response, ...(this.extended ? {} : { scheduling: FunctionResponseScheduling.WHEN_IDLE }) }],
+      functionResponses: [{ id, name, response }], // no scheduling: BLOCKING ignores it, extended thinking rejects it
     });
   }
 

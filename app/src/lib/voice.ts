@@ -155,7 +155,44 @@ function waitIce(pc: RTCPeerConnection, timeoutMs = 2500): Promise<void> {
 }
 
 const OUT_RATE = 24000; // Gemini speaks PCM16 at 24 kHz; the context resamples to the device rate
-const PLAY_LEAD = 0.02; // s between receiving a chunk and playing it: hides network jitter without adding noticeable delay
+const PLAY_LEAD = 0.15; // s of buffer when a reply starts (queue empty): absorbs tunnel/phone jitter so chunks don't leave gaps
+const PLAY_MIN = 0.03; // a chunk arriving with less headroom than this restarts the buffer instead of playing with a gap
+
+/**
+ * Plays a Web Audio stream through a local WebRTC loopback into an <audio> element. Browsers' echo
+ * cancellation only subtracts audio it knows is playing — WebRTC remote audio is; plain Web Audio
+ * output often isn't (the agent heard itself and cut its own sentences). GPT-Live gets this for free.
+ */
+async function loopbackPlayer(stream: MediaStream): Promise<{ el: HTMLAudioElement; close(): void }> {
+  const a = new RTCPeerConnection();
+  const b = new RTCPeerConnection();
+  a.onicecandidate = (e) => e.candidate && void b.addIceCandidate(e.candidate).catch(() => {});
+  b.onicecandidate = (e) => e.candidate && void a.addIceCandidate(e.candidate).catch(() => {});
+  const el = document.createElement("audio");
+  el.autoplay = true;
+  el.setAttribute("playsinline", "");
+  document.body.appendChild(el);
+  const close = () => {
+    a.close();
+    b.close();
+    el.srcObject = null;
+    el.remove();
+  };
+  try {
+    const got = new Promise<MediaStream>((res) => (b.ontrack = (e) => res(e.streams[0] ?? new MediaStream([e.track]))));
+    for (const t of stream.getAudioTracks()) a.addTrack(t, stream);
+    await a.setLocalDescription(await a.createOffer());
+    await b.setRemoteDescription(a.localDescription!);
+    await b.setLocalDescription(await b.createAnswer());
+    await a.setRemoteDescription(b.localDescription!);
+    el.srcObject = await Promise.race([got, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("loopback timeout")), 3000))]);
+    await el.play();
+    return { el, close };
+  } catch (err) {
+    close();
+    throw err;
+  }
+}
 
 /** Gemini via the runner: PCM both ways over one WebSocket. */
 class RelayVoice {
@@ -165,17 +202,32 @@ class RelayVoice {
   private capture: AudioWorkletNode | null = null;
   private playAt = 0; // when the next chunk starts (gapless playback)
   private playing = new Set<AudioBufferSourceNode>();
+  private out: AudioNode; // where agent audio goes: the loopback (echo-cancelled) or, failing that, the speakers
+  private loopback: { close(): void } | null = null;
   private done = false;
   sessionId: string | null = null;
   onState: (s: VoiceState, err?: string) => void = () => {};
 
-  constructor(private readonly ctx: AudioContext) {}
+  constructor(private readonly ctx: AudioContext) {
+    this.out = ctx.destination;
+  }
+
+  private async setupOutput() {
+    const dest = this.ctx.createMediaStreamDestination();
+    try {
+      this.loopback = await loopbackPlayer(dest.stream);
+      this.out = dest;
+    } catch (err) {
+      console.warn("[voice] echo-cancelled playback unavailable, using the speakers directly:", err);
+    }
+  }
 
   async start() {
     try {
       const [mic] = await Promise.all([
         navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }),
         this.ctx.audioWorklet.addModule("/pcm-worklet.js"),
+        this.setupOutput(),
       ]);
       this.mic = mic;
       const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -243,8 +295,9 @@ class RelayVoice {
     ab.getChannelData(0).set(f32);
     const s = this.ctx.createBufferSource();
     s.buffer = ab;
-    s.connect(this.ctx.destination);
-    const at = Math.max(this.ctx.currentTime + PLAY_LEAD, this.playAt);
+    s.connect(this.out);
+    const now = this.ctx.currentTime;
+    const at = this.playAt - now < PLAY_MIN ? now + PLAY_LEAD : this.playAt;
     s.start(at);
     this.playAt = at + ab.duration;
     this.playing.add(s);
@@ -285,6 +338,8 @@ class RelayVoice {
     this.done = true;
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.clearPlayback();
+    this.loopback?.close();
+    this.loopback = null;
     this.mic?.getTracks().forEach((t) => t.stop());
     this.mic = null;
     try {
