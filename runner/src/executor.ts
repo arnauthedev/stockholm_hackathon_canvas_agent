@@ -22,7 +22,7 @@ import { brief, record } from "./monitor.ts";
 import { redact } from "./actions.ts";
 import { findContact } from "./contacts.ts";
 import { emailConfigured, findEmails } from "./email.ts";
-import { readRules, writeRules } from "./alerts.ts";
+import { evaluateAlerts, readRules, writeRules } from "./alerts.ts";
 import { defaultSize, placeNew, pruneScreens, resize } from "./layout.ts";
 import { cancelTrigger, createEmailTrigger, createTimeTrigger, listTriggers } from "./triggers.ts";
 import { applyAction, readWidget } from "./uiactions.ts";
@@ -61,7 +61,13 @@ const handlers: { [N in ToolName]: Handler<N> } = {
   async update_data(a) {
     const id = await resolveTarget(a.target);
     const file = path.join(targetDir(id), "data.json");
-    await lock(`data:${targetDir(id)}`, async () => writeJson(file, mergePatch((await readJson(file)) ?? {}, a.patch)));
+    const data = await lock(`data:${targetDir(id)}`, async () => {
+      const next = mergePatch((await readJson(file)) ?? {}, a.patch);
+      await writeJson(file, next);
+      return next;
+    });
+    // a pinned widget updated by a recurring task (no live job): its watches are checked here instead
+    if (!isCanvasId(id)) await evaluateAlerts(id, data, []).catch((e) => console.warn("[alerts]", e));
     return { ok: true, target: id };
   },
 
@@ -325,14 +331,12 @@ const handlers: { [N in ToolName]: Handler<N> } = {
     let pinned: unknown;
     if (isCanvasId(id)) {
       // a watch must keep checking after the canvas changes → it lives on a pinned widget
-      const c = await readCanvas(id);
-      if (!c?.meta.source) return { error: "this canvas has no live data source yet — call make_live first" };
       const p = (await handlers.pin({ canvas_id: id }, ctx)) as { app_id: string };
       pinned = p;
       id = p.app_id;
     }
     const app = await readApp(id);
-    if (!app?.app.source) return { error: `"${id}" has no live data source — make_live it first` };
+    if (!app) return { error: `unknown widget "${id}"` };
     const rules = await readRules(id);
     const rule = {
       id: [slugify(a.path, 20), OP_NAMES[a.op], String(a.value ?? "").replace(/\W/g, "")].filter(Boolean).join("-"),
@@ -340,7 +344,9 @@ const handlers: { [N in ToolName]: Handler<N> } = {
     };
     await writeRules(id, [...rules.filter((r) => r.id !== rule.id), rule]);
     const current = resolvePointer(app.data, a.path);
-    return { ok: true, app_id: id, rule_id: rule.id, current_value: current ?? null, checks: `after every refresh (${app.app.refresh_s}s)`, pinned };
+    // without a live source the rule is checked whenever update_data changes the widget (e.g. a scheduled check)
+    const checks = app.app.source ? `after every refresh (${app.app.refresh_s}s)` : "whenever update_data changes this widget — it has no live source, so schedule a recurring check that updates it (or make_live)";
+    return { ok: true, app_id: id, rule_id: rule.id, current_value: current ?? null, checks, pinned };
   },
 
   async unwatch(a) {

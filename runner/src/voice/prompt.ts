@@ -1,4 +1,4 @@
-import { baseContext, CATALOG_GUIDE, DELEGATION_POLICY, stateSummary, TOOLS_GUIDE } from "../prompts.ts";
+import { baseContext, CATALOG_GUIDE, DELEGATION_POLICY, MONITOR_GUIDE, stateSummary, TOOLS_GUIDE } from "../prompts.ts";
 
 /**
  * Gemini Live instructions: the voice model holds the tools itself (no backend model), so it gets
@@ -14,6 +14,7 @@ Match the user's language.
 ${await baseContext()}
 ${CATALOG_GUIDE}
 ${TOOLS_GUIDE}
+${MONITOR_GUIDE}
 # Working by voice
 - Tools run while you keep talking: give a short acknowledgement ("Sure", "On it") when something takes a moment, then continue when the result arrives. Do not talk over the user while they are still listing things.
 - If the user starts talking while you speak, stop and listen. If they ask you to stop, wait, or drop something — in any wording or language — stop immediately.
