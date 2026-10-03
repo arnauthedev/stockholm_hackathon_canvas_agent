@@ -2,7 +2,8 @@ import type { Theme } from "@canvas-agent/contract";
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 
-function vars(colors: Record<string, unknown>): string {
+/** Theme colours → CSS custom-property declarations (`--bg: …; --accent-text: …; --chart-0: …`). */
+export function cssVars(colors: Record<string, unknown>): string {
   return Object.entries(colors)
     .map(([k, v]) =>
       Array.isArray(v) ? v.map((c, i) => `--chart-${i}: ${c};`).join(" ") : `--${kebab(k)}: ${String(v)};`,
@@ -18,8 +19,8 @@ export function applyTheme(t: Theme) {
     el.id = "theme-vars";
     document.head.appendChild(el);
   }
-  const base = `--radius: ${t.radius}px; --space: ${t.spacing}px; --font: ${t.font}; ${vars(t.colors)}`;
-  const dark = t.dark ? `@media (prefers-color-scheme: dark) { :root { ${vars(t.dark)} } }` : "";
+  const base = `--radius: ${t.radius}px; --space: ${t.spacing}px; --font: ${t.font}; ${cssVars(t.colors)}`;
+  const dark = t.dark ? `@media (prefers-color-scheme: dark) { :root { ${cssVars(t.dark)} } }` : "";
   el.textContent = `:root { ${base} } ${dark}`;
   const meta = document.querySelector('meta[name="theme-color"]');
   const isDark = matchMedia("(prefers-color-scheme: dark)").matches;

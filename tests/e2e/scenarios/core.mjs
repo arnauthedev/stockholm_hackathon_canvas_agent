@@ -728,6 +728,39 @@ export default [
     },
   },
 
+  {
+    name: "ui: custom card — ${data.x} placeholders are filled, scripts untouched; the iframe keeps the page's colour scheme",
+    tags: ["ui"],
+    async run() {
+      // what a sub-agent wrote once: a static page with template placeholders and no script reading card.data
+      const html =
+        '<div class="bg" style="background-image:url(\'${data.img}\')"></div><div id="t">${data.location}</div><div id="s">${data.temp}°C · ${data.missing}</div>' +
+        '<script>const data = card.data; document.getElementById("s").title = `${data.temp}`;</script>';
+      await tool("render", { title: "Bali", spec: { root: "c", components: { c: { type: "Custom", props: { html } } } }, data: { location: "Bali, Indonesia", temp: 24.9, img: "/files/images/none.jpg" } });
+      await tool("pin", { slug: "bali" });
+      const p = await phone();
+      try {
+        const { page } = p;
+        await page.waitForSelector(".widget iframe", { timeout: 8000 });
+        await sleep(1000);
+        const f = page.frames().find((x) => x !== page.mainFrame());
+        const got = await f.evaluate(() => ({
+          t: document.getElementById("t").textContent, s: document.getElementById("s").textContent, title: document.getElementById("s").title,
+          bg: document.querySelector(".bg").style.backgroundImage, scheme: getComputedStyle(document.documentElement).colorScheme,
+        }));
+        await page.emulateMedia({ colorScheme: "dark" });
+        await sleep(300);
+        const text = (fr) => fr.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text").trim());
+        const dark = { inner: await text(f), outer: await text(page.mainFrame()), bg: await f.evaluate(() => getComputedStyle(document.body).backgroundColor) };
+        const ok = got.t === "Bali, Indonesia" && got.s === "24.9°C · ${data.missing}" && got.title === "24.9" && got.bg.includes("/files/images/none.jpg") &&
+          got.scheme === "light dark" && dark.inner === dark.outer && dark.bg === "rgba(0, 0, 0, 0)" && !p.errors.length;
+        return { pass: ok, info: JSON.stringify({ got, dark, errors: p.errors }) };
+      } finally {
+        await p.close();
+      }
+    },
+  },
+
   // ---------------- voice (slowest; real GPT-Live) ----------------
   {
     name: "voice: pull down on home starts Talk; the canvas fades in when the agent answers",

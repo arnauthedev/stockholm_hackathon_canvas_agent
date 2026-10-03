@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../lib/store.ts";
+import { cssVars } from "../lib/theme.ts";
 import { useRenderCtx } from "./context.ts";
 
 /**
@@ -10,6 +11,16 @@ import { useRenderCtx } from "./context.ts";
  * down to fit the slot when the page is taller.
  */
 const THEME_VARS = ["--bg", "--surface", "--surface2", "--text", "--muted", "--accent", "--accent-text", "--border", "--danger", "--success"];
+/**
+ * The page's colours for the iframe, light and dark, so they follow the device live. The iframe also declares
+ * `color-scheme: light dark` like the page: an iframe whose colour scheme differs from its parent's is painted
+ * on an opaque (white) canvas, which in dark mode turned every Custom card into a white box with light text.
+ */
+function themeCss(theme: { colors: Record<string, unknown>; dark?: Record<string, unknown> } | null): string {
+  if (theme) return `:root{color-scheme:light dark;${cssVars(theme.colors)}}@media (prefers-color-scheme:dark){:root{${cssVars(theme.dark ?? theme.colors)}}}`;
+  const css = getComputedStyle(document.documentElement); // the theme hasn't arrived yet: whatever the page shows now
+  return `:root{color-scheme:light dark;${THEME_VARS.map((v) => `${v}:${css.getPropertyValue(v).trim()}`).join(";")}}`;
+}
 // Pictures may come only from this app's generated-image folder (generate_image with field); no other network.
 const csp = () => `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: ${location.origin}/files/images/; font-src data:; media-src data: blob:`;
 
@@ -51,11 +62,9 @@ export function CustomCard({ html, data }: { html?: string; data: unknown }) {
 
   // Rebuilt only when the page or the theme changes; data updates go in by postMessage (no reload).
   const doc = useMemo(() => {
-    const css = getComputedStyle(document.documentElement);
-    const vars = THEME_VARS.map((v) => `${v}:${css.getPropertyValue(v).trim()}`).join(";");
     return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp()}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>:root{${vars}}html,body{margin:0;background:transparent;color:var(--text);font:15px/1.4 -apple-system,system-ui,sans-serif;overflow-x:hidden}img,svg,video,canvas{max-width:100%}img{height:auto}</style>
+<style>${themeCss(theme)}html,body{margin:0;background:transparent;color:var(--text);font:15px/1.4 -apple-system,system-ui,sans-serif;overflow-x:hidden}img,svg,video,canvas{max-width:100%}img{height:auto}</style>
 ${runtime(first.current)}</head><body>${html ?? ""}</body></html>`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, theme]);

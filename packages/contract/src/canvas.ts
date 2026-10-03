@@ -135,10 +135,49 @@ export function isBind(v: unknown): v is Bind {
   return !!v && typeof v === "object" && typeof (v as Bind).$bind === "string" && Object.keys(v).length === 1;
 }
 
-/** Replace every `$bind` (deep) in props with its resolved value. */
+// `${data.a.b}`, `${a.b}`, `${a[0]}` or `${/json/pointer}` — a template placeholder a model wrote into a string
+// (a Custom card's HTML, a Link's href…) where it meant a $bind. Nothing else ever fills it, so we do.
+const PLACEHOLDER = /\$\{\s*((?:data\.)?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[\d+\])*|\/[^}\s]*)\s*\}/g;
+const ONE_PLACEHOLDER = new RegExp(`^\\s*${PLACEHOLDER.source}\\s*$`);
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+const asText = (v: unknown) => (v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
+
+function lookupPath(data: unknown, path: string): unknown {
+  if (path.startsWith("/")) return resolvePointer(data, path);
+  let cur = data;
+  for (const k of path.replace(/^data\./, "").replace(/\[(\d+)\]/g, ".$1").split(".")) {
+    if (cur == null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[k];
+  }
+  return cur;
+}
+
+/**
+ * Fill `${…}` placeholders in a string prop from data. A prop that is exactly one placeholder becomes the
+ * value itself (a number, an array…). Unknown names stay as written. In HTML, <script> bodies are left
+ * alone (JS template literals are the page's own) and substituted values are escaped.
+ */
+export function fillPlaceholders(s: string, data: unknown): unknown {
+  if (!s.includes("${")) return s;
+  const one = ONE_PLACEHOLDER.exec(s);
+  if (one) {
+    const v = lookupPath(data, one[1] ?? "");
+    return v === undefined ? s : v;
+  }
+  const html = /<[a-z!]/i.test(s);
+  const fill = (part: string) => part.replace(PLACEHOLDER, (m, path: string) => {
+    const v = lookupPath(data, path);
+    return v === undefined ? m : html ? escapeHtml(asText(v)) : asText(v);
+  });
+  if (!html) return fill(s);
+  return s.split(/(<script\b[\s\S]*?<\/script>)/i).map((seg, i) => (i % 2 ? seg : fill(seg))).join("");
+}
+
+/** Replace every `$bind` (deep) in props with its resolved value; string props get their `${…}` placeholders filled. */
 export function resolveProps(props: Record<string, unknown> | undefined, data: unknown): Record<string, unknown> {
   const walk = (v: unknown): unknown => {
     if (isBind(v)) return resolvePointer(data, v.$bind);
+    if (typeof v === "string") return fillPlaceholders(v, data);
     if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
     return v;

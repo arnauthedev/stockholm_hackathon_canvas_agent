@@ -45,10 +45,12 @@ body::before {
 .widget, .c-metric, .c-kv, .c-list, .c-chart, .c-approval, .c-checklist, .c-notebook, .c-stack-empty, .c-stack-done, .task, .scheduled ul {
   background: var(--glass); border-color: var(--hairline); box-shadow: var(--lift);
 }
-.c-card { background: var(--glass-strong); border-color: var(--hairline); box-shadow: var(--lift-high); }
-.c-approval-actions { background: transparent; }
+/* Stacked cards stay opaque: at 88% the cards underneath showed through the top one */
+.c-card { background: var(--surface); border-color: var(--hairline); box-shadow: var(--lift-high); }
+/* The sticky Accept/Reject bar still covers what scrolls under it */
+.c-approval-actions { background: var(--glass-strong); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 /* Inside a widget, its content sits straight on the card: no second box */
-.widget .c-metric, .widget .c-kv, .widget .c-list, .widget .c-chart, .widget .c-checklist, .widget .c-notebook {
+.widget .c-metric, .widget .c-kv, .widget .c-list, .widget .c-chart, .widget .c-checklist, .widget .c-notebook, .widget .c-approval, .widget .c-stack-empty, .widget .c-stack-done {
   background: none; border: 0; box-shadow: none; padding-left: 0; padding-right: 0;
 }
 .widget .c-checklist { padding-top: 0; }
