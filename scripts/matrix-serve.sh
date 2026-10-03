@@ -29,7 +29,7 @@ PORT="${PORT:-18787}"
 [ -f app/dist/index.html ] || pnpm --filter @canvas-agent/app build
 
 TUNNEL_PID=""; RUNNER_PID=""
-cleanup() { for p in "$RUNNER_PID" "$TUNNEL_PID"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done; rm -f logs/runner.pid logs/serve.pid; }
+cleanup() { for p in "$RUNNER_PID" "$TUNNEL_PID"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done; rm -f logs/runner.pid logs/serve.pid logs/public-url; }
 trap cleanup EXIT
 trap 'exit 0' INT TERM
 

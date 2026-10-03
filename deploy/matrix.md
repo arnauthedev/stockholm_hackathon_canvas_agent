@@ -48,10 +48,10 @@ matrix upload /tmp/agent-home.tgz projects/canvas-agent/agent-home.tgz
 matrix run -C projects/canvas-agent -- bash -lc 'tar xzf agent-home.tgz && rm agent-home.tgz'
 ```
 
-Start the serve loop (detached, so it outlives the terminal):
+Start the serve loop by deploying once from the laptop: it installs a cron watchdog that starts it (and restarts it after a crash or reboot):
 
 ```bash
-matrix run -C projects/canvas-agent -- bash scripts/matrix-serve.sh --detach
+bash scripts/matrix-deploy.sh
 ```
 
 `scripts/matrix-serve.sh` opens a Cloudflare quick tunnel to the runner, prints the pairing link and QR, and restarts the runner whenever it exits. The URL is written to `logs/public-url` and the output to `logs/serve.log`. Open the link on the phone and Add to Home Screen.
@@ -77,7 +77,7 @@ It pushes the branch, then on Matrix pulls it, runs `pnpm install`, rebuilds the
 ## Limits
 
 - **Quick-tunnel URL**: it changes when `matrix-serve.sh` itself restarts (Matrix reboot, loop killed), and then the phone has to be re-paired. For a fixed URL, set `PUBLIC_URL` and run a named Cloudflare tunnel (`cloudflared tunnel run`) or `tailscale funnel 18787` instead; `matrix-serve.sh` skips its own tunnel when `PUBLIC_URL` is set.
-- **Reboots**: the serve loop does not survive a reboot of the Matrix computer. After one, run `bash scripts/matrix-deploy.sh` (it starts the loop) and re-pair the phone.
+- **Watchdog**: `scripts/matrix-deploy.sh` installs a cron job that starts the serve loop within a minute whenever it isn't running (crash, reboot). Don't start the loop through `matrix run` yourself: processes started that way live in Matrix's gateway service and are killed whenever Matrix restarts the gateway. After a restart the quick-tunnel URL is new, so re-pair the phone (`bash scripts/matrix-pair.sh`).
 - **Self-hosted Matrix**: instead of the tunnel you can proxy the instance's nginx to `127.0.0.1:$PORT` (WebSocket upgrade headers, `proxy_read_timeout 3600s`). That location must skip Matrix's Basic Auth because the PWA sends its own bearer token.
 
 ## Partner extras (no core code changes)

@@ -27,11 +27,15 @@ remote "git fetch -q origin && git checkout -q $BRANCH && git merge -q --ff-only
   pnpm install --frozen-lockfile --silent"
 remote "mkdir -p logs; pnpm --filter @canvas-agent/app build > logs/build.log 2>&1 || { tail -30 logs/build.log; exit 1; }
   echo '[matrix] app built'"
+# Watchdog: cron starts the serve loop if it isn't running. Processes started through `matrix run` live in
+# Matrix's gateway service and die whenever Matrix restarts it; cron's don't, and cron also covers reboots.
+remote "(crontab -l 2>/dev/null | grep -q matrix-serve.sh) || { (crontab -l 2>/dev/null; echo \"* * * * * bash -lc 'cd ~/$MATRIX_DIR && bash scripts/matrix-serve.sh --detach' >/dev/null 2>&1\") | crontab - && echo '[matrix] watchdog installed'; }"
 remote "if [ -f logs/runner.pid ] && kill \$(cat logs/runner.pid) 2>/dev/null; then
     . ./.env  # not exported: only for the health check below
     ok=0; for i in \$(seq 1 30); do sleep 1; curl -sf -m 2 -o /dev/null -H \"authorization: Bearer \$RUNNER_TOKEN\" http://127.0.0.1:\${PORT:-18787}/api/health && { ok=1; break; }; done
     [ \$ok = 1 ] && echo '[matrix] runner restarted' || echo '[matrix] runner not healthy yet: see logs/serve.log'
   else
-    echo '[matrix] serve loop not running; starting it'; bash scripts/matrix-serve.sh --detach | tail -3
+    echo '[matrix] serve loop not running; the watchdog starts it within a minute'
+    for i in \$(seq 1 75); do sleep 1; [ -s logs/public-url ] && break; done
   fi
   [ -f logs/public-url ] && echo \"[matrix] live at \$(cat logs/public-url)\""
