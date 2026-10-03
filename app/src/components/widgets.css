@@ -1,0 +1,5 @@
+/* Widgets whose content names itself: no title row; the live dot and alert bell float in the corner */
+.widget-head.bare { position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none; }
+.widget-head.bare:empty { display: none; }
+.widget-head.bare .live-dot { box-shadow: 0 0 0 2px var(--surface); }
+.widget-head.bare .bell { filter: drop-shadow(0 0 2px var(--surface)); }

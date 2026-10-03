@@ -3,8 +3,12 @@ import { GRID_COLS, GRID_ROWS, WIDGET_SIZES, type AppEntry, type WidgetSize } fr
 import { api, callTool } from "../lib/api.ts";
 import { useStore } from "../lib/store.ts";
 import { Renderer } from "../catalog/Renderer.tsx";
+import "./widgets.css";
 
 const SIZES: WidgetSize[] = ["S", "W", "L", "T"];
+
+/** Content that says what it is (its own heading, a picture or a Custom card) needs no widget title above it. */
+const selfTitled = (app: AppEntry) => Object.values(app.spec.components).some((c) => c.type === "Heading" || c.type === "Custom" || c.type === "Image");
 
 function Widget({ app, edit, onDragStart }: { app: AppEntry; edit: boolean; onDragStart(e: RPointerEvent, app: AppEntry): void }) {
   const L = app.app.layout ?? { x: 0, y: 0, w: 2, h: 2, size: "S" as WidgetSize };
@@ -17,8 +21,8 @@ function Widget({ app, edit, onDragStart }: { app: AppEntry; edit: boolean; onDr
       style={{ gridColumn: `${L.x + 1} / span ${L.w}`, gridRow: `${L.y + 1} / span ${L.h}` }}
       onPointerDown={edit ? (e) => onDragStart(e, app) : undefined}
     >
-      <div className="widget-head">
-        <span className="widget-title">{app.app.title}</span>
+      <div className={selfTitled(app) ? "widget-head bare" : "widget-head"} title={app.app.title}>
+        {!selfTitled(app) && <span className="widget-title">{app.app.title}</span>}
         {app.watches?.rules ? <span className={`bell ${app.watches.active.length ? "ringing" : ""}`} title={`${app.watches.rules} alert(s)`}>🔔</span> : null}
         {app.app.refresh_s ? <span className={stale ? "live-dot err" : "live-dot"} title={`live · every ${app.app.refresh_s}s`} /> : null}
       </div>
