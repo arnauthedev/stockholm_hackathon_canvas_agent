@@ -157,6 +157,30 @@ function waitIce(pc: RTCPeerConnection, timeoutMs = 2500): Promise<void> {
 const OUT_RATE = 24000; // Gemini speaks PCM16 at 24 kHz; the context resamples to the device rate
 const PLAY_LEAD = 0.15; // s of buffer when a reply starts (queue empty): absorbs tunnel/phone jitter so chunks don't leave gaps
 const PLAY_MIN = 0.03; // a chunk arriving with less headroom than this restarts the buffer instead of playing with a gap
+// Echo gate. Gemini's turn detector fires on the agent's own voice even 30 dB down (measured 2026-10-03),
+// which no browser echo canceller guarantees on a speakerphone; each false start cut the reply and the
+// model answered its own words. While agent audio plays, mic chunks quieter than GATE_DB go out as
+// silence; a chunk above it (the user talking over the agent) opens the mic for a while.
+const GATE_TAIL = 0.35; // s after the last scheduled agent sample during which the gate still applies (acoustic + canceller tail)
+const GATE_OPEN_MS = 400; // once the user is clearly heard over the agent, keep the mic open this long
+const GATE_DB = -26; // dBFS RMS a mic chunk must reach while the agent plays; tune on the device: localStorage.voiceGateDb = "-20"
+
+/** Barge-in level: localStorage.voiceGateDb (dBFS) or GATE_DB, as int16 RMS. */
+function gateLevel(): { db: number; rms: number } {
+  let db = GATE_DB;
+  try {
+    const v = Number(localStorage.getItem("voiceGateDb"));
+    if (v && Number.isFinite(v)) db = v;
+  } catch {}
+  return { db, rms: Math.pow(10, db / 20) * 32768 };
+}
+function rmsInt16(buf: ArrayBuffer): number {
+  const a = new Int16Array(buf);
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += a[i]! * a[i]!;
+  return a.length ? Math.sqrt(s / a.length) : 0;
+}
+const toDb = (rms: number) => (rms > 0 ? Math.round(20 * Math.log10(rms / 32768)) : -120);
 
 /**
  * Plays a Web Audio stream through a local WebRTC loopback into an <audio> element. Browsers' echo
@@ -194,7 +218,7 @@ async function loopbackPlayer(stream: MediaStream): Promise<{ el: HTMLAudioEleme
   }
 }
 
-/** Gemini via the runner: PCM both ways over one WebSocket. */
+/** Gemini via the runner: PCM both ways over one WebSocket; the mic is gated while agent audio plays (GATE_DB). */
 class RelayVoice {
   private ws: WebSocket | null = null;
   private mic: MediaStream | null = null;
@@ -245,8 +269,22 @@ class RelayVoice {
       // mic → worklet (PCM16 16 kHz) → socket. A muted path to the output keeps the worklet scheduled.
       this.source = this.ctx.createMediaStreamSource(mic);
       this.capture = new AudioWorkletNode(this.ctx, "pcm16-capture", { processorOptions: { targetRate: 16000 } });
+      const gate = gateLevel();
+      let openUntil = 0;
+      let lastLog = 0;
       this.capture.port.onmessage = (e) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(e.data as ArrayBuffer);
+        if (ws.readyState !== WebSocket.OPEN) return;
+        const buf = e.data as ArrayBuffer;
+        if (this.ctx.currentTime >= this.playAt + GATE_TAIL) return ws.send(buf); // nothing of ours is playing: the mic goes through as is
+        const rms = rmsInt16(buf);
+        const t = performance.now();
+        if (rms >= gate.rms) openUntil = t + GATE_OPEN_MS;
+        const open = t < openUntil;
+        if (t - lastLog > 1000) {
+          lastLog = t;
+          console.log(`[voice] gate ${open ? "open" : "closed"} while the agent plays: mic ${toDb(rms)} dBFS, barge-in at ${gate.db} dBFS`);
+        }
+        ws.send(open ? buf : new ArrayBuffer(buf.byteLength)); // silence keeps the stream continuous for the server's turn detector
       };
       const mute = this.ctx.createGain();
       mute.gain.value = 0;

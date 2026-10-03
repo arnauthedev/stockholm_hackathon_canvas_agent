@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
-import { Behavior, GoogleGenAI, MediaResolution, Modality, StartSensitivity, ThinkingLevel, type FunctionCall, type FunctionDeclaration, type LiveConnectConfig, type LiveServerMessage, type Session } from "@google/genai";
+import { ActivityHandling, Behavior, GoogleGenAI, MediaResolution, Modality, StartSensitivity, ThinkingLevel, type FunctionCall, type FunctionDeclaration, type LiveConnectConfig, type LiveServerMessage, type Session } from "@google/genai";
 import WebSocket, { WebSocketServer, type RawData } from "ws";
 import { helperDefs, toolDefs, TOOL_NAMES, type ToolDef, type VoiceSession } from "@canvas-agent/contract";
 import { route, type Route } from "../../../config/routes.ts";
@@ -21,6 +21,13 @@ import { T, VoiceCore, toolOutputText, voiceNameFor } from "./core.ts";
  * and with NON_BLOCKING + WHEN_IDLE the model sometimes never resumed after a result (30 s of silence
  * on the phone). Extended thinking only supports NON_BLOCKING.
  *
+ * Echo: the phone gates its mic while agent audio plays (app voice.ts, GATE_DB). Gemini's turn detector
+ * fires on the agent's own voice even 30 dB down, then cuts the reply and answers itself; a low start
+ * sensitivity and prefixPaddingMs do not help (measured 2026-10-03). VOICE_NO_BARGE_IN=1 is the blunt
+ * fallback (NO_INTERRUPTION): immune to echo, but anything said while the agent talks is dropped.
+ * Timing: a sentence arrives in a burst (3 s of audio in ~0.7 s), so "the agent is speaking" is the
+ * phone's projected playback end (playbackEndsAt), not the arrival of chunks.
+ *
  * Phone → runner: binary = PCM16 mono 16 kHz; JSON {type:"video", data} (JPEG base64, while the
  *   camera is open), {type:"audio_end"} (mic paused), {type:"interrupt"}, {type:"close"}.
  * Runner → phone: binary = PCM16 mono 24 kHz; JSON {type:"ready", session_id}, {type:"interrupted"}
@@ -29,6 +36,9 @@ import { T, VoiceCore, toolOutputText, voiceNameFor } from "./core.ts";
 
 const RECONNECT_TRIES = 3; // resumes after GoAway / the ~10 min connection limit, with the last handle
 const DEBUG = process.env.VOICE_DEBUG === "1";
+const NO_BARGE_IN = process.env.VOICE_NO_BARGE_IN === "1";
+const PHONE_LAG = 300; // ms from sending a chunk to the phone starting to play it (tunnel + its playback lead)
+const BYTES_PER_MS = 48; // PCM16 mono 24 kHz
 
 let _ai: GoogleGenAI | null = null;
 const ai = () => (_ai ??= new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }));
@@ -102,6 +112,8 @@ class GeminiLiveSession extends VoiceCore {
   private pending = new Map<string, string>();
   private generating = false;
   private spoke = false;
+  private playbackEndsAt = 0; // when the phone will have played everything sent so far
+  private muted = false; // the user tapped stop: the rest of this turn's audio is dropped
   private readonly t0 = Date.now();
   private status: "IN_PROGRESS" | "IDLE" = "IDLE"; // extended thinking: turnComplete alone doesn't mean idle
   private resumeHandle: string | undefined;
@@ -131,8 +143,11 @@ class GeminiLiveSession extends VoiceCore {
       contextWindowCompression: { slidingWindow: {} }, // calls longer than 15 min
       sessionResumption: {}, // handles for reconnecting
       mediaResolution: MediaResolution.MEDIA_RESOLUTION_LOW, // camera frames: enough for "what is this", cheap
-      // residual echo of the agent's own voice must not count as the user barging in (it cut its own sentences)
-      realtimeInputConfig: { automaticActivityDetection: { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW } },
+      // a little less trigger-happy; the real protection against the agent's own echo is the phone's mic gate (header)
+      realtimeInputConfig: {
+        automaticActivityDetection: { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW },
+        ...(NO_BARGE_IN ? { activityHandling: ActivityHandling.NO_INTERRUPTION } : {}),
+      },
       ...(this.extended ? { thinkingConfig: { thinkingLevel: thinkingLevel(this.cfg.voiceReasoning) } } : {}),
     };
     this.bindPhone(); // before the upstream connect: the phone starts streaming as soon as its socket opens
@@ -222,27 +237,32 @@ class GeminiLiveSession extends VoiceCore {
       if (c.interactionStatus === "IDLE" || c.interactionStatus === "IN_PROGRESS") this.status = c.interactionStatus;
       if (c.interrupted) {
         this.toPhone({ type: "interrupted" }); // the user spoke over the agent: drop queued playback
+        this.playbackEndsAt = this.lastOutputAt = Date.now();
         this.flush("agent");
       }
       for (const p of c.modelTurn?.parts ?? []) {
         if (!p.inlineData?.data) continue;
+        this.generating = true;
+        if (this.muted) continue; // the user tapped stop: the rest of this turn is not played
         if (!this.spoke) console.log(`[voice] gemini ${this.id}: first audio from the model`);
         this.spoke = true;
-        this.lastOutputAt = Date.now();
-        this.generating = true;
-        if (this.phone.readyState === WebSocket.OPEN) this.phone.send(Buffer.from(p.inlineData.data, "base64"), { binary: true });
+        const chunk = Buffer.from(p.inlineData.data, "base64");
+        this.playbackEndsAt = Math.max(this.playbackEndsAt, Date.now() + PHONE_LAG) + chunk.length / BYTES_PER_MS;
+        this.lastOutputAt = this.playbackEndsAt; // "speaking" lasts until the phone has played it, not until it arrived
+        if (this.phone.readyState === WebSocket.OPEN) this.phone.send(chunk, { binary: true });
       }
       if (c.inputTranscription?.text) {
         this.lastInputAt = Date.now();
         this.transcript("user", c.inputTranscription.text);
       }
       if (c.outputTranscription?.text) {
-        this.lastOutputAt = Date.now();
+        this.lastOutputAt = Math.max(this.lastOutputAt, Date.now());
         this.transcript("agent", c.outputTranscription.text);
       }
       if (c.turnComplete) {
         this.generating = false;
-        this.flush("agent");
+        this.muted = false;
+        this.flushWhenHeard("agent"); // the line ends when the phone finishes playing: the stop button reads "mid-sentence" from it
         this.maybeIdle();
       }
     }
@@ -312,6 +332,10 @@ class GeminiLiveSession extends VoiceCore {
     return this.pending.size > 0 || this.generating || (!!this.activity && Date.now() - this.lastDelegationAt < T.delegationTimeout);
   }
 
+  protected speakingUntil() {
+    return this.playbackEndsAt;
+  }
+
   /** Added to the context; the model responds to it with the user's next turn, not now. */
   protected sendSilent(text: string) {
     this.session?.sendClientContent({ turns: [{ role: "user", parts: [{ text: `(System note, not the user speaking.) ${text}` }] }], turnComplete: false });
@@ -330,10 +354,13 @@ class GeminiLiveSession extends VoiceCore {
     });
   }
 
-  /** A completed client turn cuts the current generation; the phone drops what it had queued. */
+  /** The stop button: the phone drops its queue, the rest of this turn is not forwarded, and the model is told without being asked to answer (a completed client turn made it reply again). */
   interrupt() {
     this.toPhone({ type: "interrupted" });
-    this.session?.sendClientContent({ turns: [{ role: "user", parts: [{ text: "(The user tapped stop.) Stop speaking now and wait silently for the user." }] }], turnComplete: true });
+    this.muted = this.generating;
+    this.playbackEndsAt = this.lastOutputAt = Date.now();
+    this.flush("agent");
+    this.sendSilent("The user tapped stop while you were speaking; they did not hear the rest. Wait for them.");
   }
 
   /** Tell the phone, end the call, and drop the session even if Gemini never says goodbye. */

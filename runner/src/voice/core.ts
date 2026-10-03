@@ -117,7 +117,20 @@ export abstract class VoiceCore implements VoiceSession {
     this.cur = this.cur ? { role, text: this.cur.text + delta } : { role, text: delta };
     for (const cb of this.transcriptCbs) cb({ role, text: this.cur.text.trim(), final: false });
     clearTimeout(this.flushTimer);
-    this.flushTimer = setTimeout(() => this.flush(), T.transcriptFlush);
+    this.flushTimer = setTimeout(() => this.cur && this.flushWhenHeard(this.cur.role), T.transcriptFlush);
+  }
+
+  /** End `role`'s line once the user has actually heard it (see speakingUntil); the user's line ends now. */
+  protected flushWhenHeard(role: "user" | "agent") {
+    const wait = this.speakingUntil() - Date.now();
+    clearTimeout(this.flushTimer);
+    if (role === "agent" && wait > 0) this.flushTimer = setTimeout(() => this.flush(role), wait);
+    else this.flush(role);
+  }
+
+  /** Until when the phone is still playing the agent (a provider whose audio arrives ahead of playback overrides this). */
+  protected speakingUntil() {
+    return 0;
   }
 
   /** End the current transcript line now (optionally only if it belongs to `role`). */
