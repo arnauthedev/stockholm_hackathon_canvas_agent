@@ -23,8 +23,9 @@ matrix run -C . -- bash -lc "set -e; cd ~/$MATRIX_DIR; set -a; . ./.env; set +a
   health() { curl -sf -m 2 -o /dev/null -H \"authorization: Bearer \$RUNNER_TOKEN\" http://127.0.0.1:\${PORT:-18787}/api/health; }
   git fetch -q origin && git checkout -q $BRANCH && git merge -q --ff-only origin/$BRANCH
   echo \"[matrix] at \$(git log --oneline -1)\"
-  pnpm install --frozen-lockfile --silent
-  pnpm --filter @canvas-agent/app build >/dev/null && echo '[matrix] app built'
+  pnpm install --frozen-lockfile --silent; mkdir -p logs
+  pnpm --filter @canvas-agent/app build > logs/build.log 2>&1 || { tail -30 logs/build.log; exit 1; }
+  echo '[matrix] app built'
   if [ -f logs/runner.pid ] && kill \$(cat logs/runner.pid) 2>/dev/null; then
     for i in \$(seq 1 30); do sleep 1; health && break; done
     health && echo '[matrix] runner restarted' || echo '[matrix] runner not healthy yet: see logs/serve.log'
