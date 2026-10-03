@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0e0f11" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <title>Canvas Agent</title>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot" style="font-family:-apple-system,system-ui,sans-serif;padding:64px 24px;color:#5f6368;text-align:center">Loading Canvas Agent…</div>
+    </div>
+    <script>
+      // Never a blank page: if the app hasn't mounted after a while, or a script fails, say why.
+      (function () {
+        function show(msg) {
+          var b = document.getElementById("boot");
+          if (b) b.innerHTML = msg;
+        }
+        window.addEventListener("error", function (e) {
+          if (e.target && (e.target.tagName === "SCRIPT" || e.target.tagName === "LINK")) show("Couldn't load the app files.<br><br>This link may be from an older session — open the latest pairing link from <code>scripts/dev.sh</code>.");
+          else if (e.message) show("The app hit an error:<br><code>" + String(e.message).replace(/</g, "&lt;") + "</code><br><br>Reload to retry.");
+        }, true);
+        setTimeout(function () { show("Still loading… If this persists, this link may be from an older session — open the latest pairing link from <code>scripts/dev.sh</code>, then reload."); }, 15000);
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
