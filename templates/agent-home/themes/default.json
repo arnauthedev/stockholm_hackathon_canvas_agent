@@ -2,18 +2,18 @@
   "schema_version": 1,
   "name": "default",
   "colors": {
-    "bg": "#f6f6f4", "surface": "#ffffff", "surface2": "#efefec", "text": "#121212", "muted": "#5f6368",
-    "accent": "#1a56db", "accentText": "#ffffff", "border": "#dcdcd7",
-    "success": "#137333", "warn": "#b06000", "danger": "#c5221f",
-    "chart": ["#1a56db", "#e8710a", "#188038", "#a142f4", "#d01884"]
+    "bg": "#f7f9fe", "surface": "#ffffff", "surface2": "#eef2fb", "text": "#0d1326", "muted": "#5c6785",
+    "accent": "#3b5bfd", "accentText": "#ffffff", "border": "#e3e8f4",
+    "success": "#12805c", "warn": "#b45309", "danger": "#d4343b",
+    "chart": ["#3b5bfd", "#14b8d4", "#8b5cf6", "#f59e0b", "#e8488a"]
   },
   "dark": {
-    "bg": "#0e0f11", "surface": "#1a1b1e", "surface2": "#24262a", "text": "#f2f2f0", "muted": "#a0a4aa",
-    "accent": "#6d9bff", "accentText": "#0b1020", "border": "#33363b",
-    "success": "#5bb974", "warn": "#fbbc04", "danger": "#f28b82",
-    "chart": ["#6d9bff", "#fcad70", "#81c995", "#d7aefb", "#ff8bcb"]
+    "bg": "#0a0d1a", "surface": "#121729", "surface2": "#1a2036", "text": "#eef1fb", "muted": "#9aa3bd",
+    "accent": "#7b93ff", "accentText": "#0a0d1a", "border": "#262d47",
+    "success": "#5bd08f", "warn": "#fbbf24", "danger": "#ff8a8a",
+    "chart": ["#7b93ff", "#4dd8ee", "#b69cff", "#fcc15a", "#ff8bc0"]
   },
-  "radius": 16,
+  "radius": 18,
   "font": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif",
   "spacing": 16
 }

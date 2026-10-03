@@ -1,0 +1,109 @@
+/* Aurora look: a cool white page with soft blue/cyan/violet light behind frosted surfaces.
+   Loaded after styles.css and only restyles; the theme tokens (#theme-vars) still drive the colours. */
+:root {
+  /* fallback tokens until the theme arrives (same as templates/agent-home/themes/default.json) */
+  --bg: #f7f9fe; --surface: #ffffff; --surface2: #eef2fb; --text: #0d1326; --muted: #5c6785;
+  --accent: #3b5bfd; --accent-text: #ffffff; --border: #e3e8f4;
+  /* the light itself: the logo's cyan → blue → violet */
+  --aurora-1: #5ee0ff; --aurora-2: #5b7cff; --aurora-3: #a985ff;
+  --aurora-strength: 30%;
+  --glass: color-mix(in srgb, var(--surface) 74%, transparent);
+  --glass-strong: color-mix(in srgb, var(--surface) 88%, transparent);
+  --hairline: color-mix(in srgb, var(--border) 75%, transparent);
+  --lift: 0 1px 2px rgb(24 39 110 / .05), 0 10px 30px -14px rgb(40 60 160 / .22);
+  --lift-high: 0 2px 6px rgb(24 39 110 / .06), 0 18px 48px -16px rgb(40 60 160 / .32);
+  --aurora:
+    radial-gradient(60% 45% at 8% 0%, color-mix(in srgb, var(--aurora-1) var(--aurora-strength), transparent), transparent 70%),
+    radial-gradient(55% 40% at 100% 12%, color-mix(in srgb, var(--aurora-3) var(--aurora-strength), transparent), transparent 70%),
+    radial-gradient(70% 50% at 70% 100%, color-mix(in srgb, var(--aurora-2) var(--aurora-strength), transparent), transparent 70%);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0d1a; --surface: #121729; --surface2: #1a2036; --text: #eef1fb; --muted: #9aa3bd;
+    --accent: #7b93ff; --accent-text: #0a0d1a; --border: #262d47;
+    --aurora-strength: 22%;
+    --glass: color-mix(in srgb, var(--surface) 70%, transparent);
+    --glass-strong: color-mix(in srgb, var(--surface) 86%, transparent);
+    --lift: 0 1px 2px rgb(0 0 0 / .3), 0 12px 32px -14px rgb(0 0 0 / .6);
+    --lift-high: 0 2px 6px rgb(0 0 0 / .35), 0 20px 50px -16px rgb(0 0 0 / .7);
+  }
+}
+
+/* The page: aurora over the theme background. The canvas layer repaints the same light so it lines up. */
+body, .canvas-layer { background: var(--aurora), var(--bg); background-attachment: fixed; }
+body::before {
+  /* a slow drift of one extra glow keeps it alive without costing anything per frame (transform only) */
+  content: ""; position: fixed; z-index: 0; pointer-events: none; width: 90vmax; height: 90vmax; left: -30vmax; top: 20vh;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--aurora-2) calc(var(--aurora-strength) * .6), transparent), transparent);
+  animation: aurora-drift 38s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift { to { transform: translate(60vw, -25vh) scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
+.app { z-index: 1; }
+
+/* Surfaces: frosted white cards, hairline borders, a soft blue-tinted lift */
+.widget, .c-metric, .c-kv, .c-list, .c-chart, .c-approval, .c-checklist, .c-notebook, .c-stack-empty, .c-stack-done, .task, .scheduled ul {
+  background: var(--glass); border-color: var(--hairline); box-shadow: var(--lift);
+}
+.c-card { background: var(--glass-strong); border-color: var(--hairline); box-shadow: var(--lift-high); }
+.c-approval-actions { background: transparent; }
+/* Inside a widget, its content sits straight on the card: no second box */
+.widget .c-metric, .widget .c-kv, .widget .c-list, .widget .c-chart, .widget .c-checklist, .widget .c-notebook {
+  background: none; border: 0; box-shadow: none; padding-left: 0; padding-right: 0;
+}
+.widget .c-checklist { padding-top: 0; }
+.widget-title { font-weight: 650; color: var(--muted); letter-spacing: .01em; }
+.screen-empty, .empty-slot { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* Headings and numbers: a little tighter, like the rest of the system UI */
+.c-h1 { letter-spacing: -.025em; font-weight: 750; }
+.c-metric-value { letter-spacing: -.03em; }
+.c-metric-label { font-weight: 550; }
+
+/* Controls */
+.btn, .chip { background: var(--glass); border-color: var(--hairline); }
+.btn.primary, .c-link, .tl.user, .size-chips button.on, .pull-talk.ready {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, var(--aurora-1)), var(--accent) 55%, color-mix(in srgb, var(--accent) 70%, var(--aurora-3)));
+  box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.segmented { background: color-mix(in srgb, var(--surface2) 80%, transparent); }
+.c-field input:not([type=checkbox]), .c-field textarea, .c-field select, .text-row input { background: var(--glass-strong); border-color: var(--hairline); }
+.c-field input:focus, .c-field textarea:focus, .text-row input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; }
+.c-check .box { border-color: color-mix(in srgb, var(--muted) 35%, transparent); }
+
+/* Top: the active page dot carries the accent */
+.dot.on::after { background: var(--accent); }
+
+/* Bottom bar: a frosted fade instead of a flat band, glass side buttons, a glowing talk button */
+.bottombar { background: none; }
+.bottombar::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 40%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  -webkit-mask-image: linear-gradient(to top, #000 55%, transparent); mask-image: linear-gradient(to top, #000 55%, transparent);
+}
+.side-btn {
+  background: var(--glass-strong); border-color: var(--hairline); box-shadow: var(--lift);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.side-btn.on { background: var(--accent); }
+.talk-btn:not(.live):not(.error) {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 55%, var(--aurora-1)), var(--accent) 50%, color-mix(in srgb, var(--accent) 60%, var(--aurora-3)));
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 10%, transparent), 0 14px 34px -10px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+/* Floating layers: frosted sheets, pills and transcript bubbles */
+.sheet {
+  background: color-mix(in srgb, var(--bg) 82%, transparent); box-shadow: var(--lift-high);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
+}
+.sheet-backdrop { background: color-mix(in srgb, var(--text) 22%, transparent); }
+.tl:not(.user), .pull-talk, .link-prompt, .approval-pill, .size-chips {
+  background: var(--glass-strong); border-color: var(--hairline);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+.toast { box-shadow: var(--lift-high); }
+
+/* The Mac notch panel stays a plain black panel */
+.shell-mac body, .shell-mac .canvas-layer { background: var(--bg); }
+.shell-mac body::before { display: none; }

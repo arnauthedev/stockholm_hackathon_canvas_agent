@@ -5,6 +5,7 @@ import { Dashboard } from "./dashboard/Dashboard.tsx";
 import { initMacShell, isMacShell } from "./lib/shell.ts";
 import { keepFresh } from "./lib/update.ts";
 import "./styles.css";
+import "./aurora.css";
 
 // Dev: only the push-only SW (no caching); leftover caching SWs from older sessions are removed.
 if (import.meta.env.DEV && !isMacShell && "serviceWorker" in navigator) void import("./lib/push.ts").then((m) => m.swRegistration());
