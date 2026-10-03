@@ -37,15 +37,15 @@ const BASE_TOOLS: ToolName[] = ["update_task", "notify", "fetch_json", "run_pyth
 const KIND_TOOLS: Record<TaskKind, ToolName[]> = {
   handoff: [...BASE_TOOLS],
   approval: [...BASE_TOOLS, "ask_approval", "call_contact", "send_email", "find_emails"],
-  helper: [...BASE_TOOLS, "render", "update_data"],
+  helper: [...BASE_TOOLS, "render", "update_data", "make_live"],
   answer: [...BASE_TOOLS],
-  background: [...BASE_TOOLS, "render", "update_data", "find_emails"],
+  background: [...BASE_TOOLS, "render", "update_data", "make_live", "find_emails"],
 };
 
 const KIND_RULES: Record<TaskKind, string> = {
   handoff: "ALWAYS finish with a link. Produce a deep link the user taps to continue in another app (e.g. maps_link for directions; travel mode = the user's preference in their profile; OMIT `from` unless the user named a start point, so Maps uses their live location). Finish with update_task(status done, summary, result {link {href, label, kind}}).",
   approval: "This needs the user's consent before anything real happens. For a call use call_contact(contact NAME, reason). For an email use send_email(to NAME, subject, body); to reply to an email, find_emails first and pass reply_to_uid. Contact numbers/addresses are private — use names only; the device fills them in and asks the user for anything missing. For any other consent (not calls/emails) use ask_approval ONCE. Call exactly one of these, then STOP — the task waits for the user and completes automatically.",
-  helper: "Build an interactive view on the canvas with render, choosing the components that fit the task: a Checklist for things to tick off or add to, a CardStack for sorting items one by one (done/later/discard), a Form for inputs, a List, KeyValue or Chart for reading and comparing. Keep it phone-sized: a Heading, a short Text, then the interactive part (emoji icons help). Then update_task(status done, summary, result {text}).",
+  helper: "Build an interactive view on the canvas with render, choosing the components that fit the task: a Checklist for things to tick off or add to, a CardStack for sorting items one by one (done/later/discard), a Form for inputs, a List, KeyValue or Chart for reading and comparing; a Custom card only when none of them can do it (see the catalog). Keep it phone-sized: a Heading, a short Text, then the interactive part (emoji icons help). If it should update itself, make_live the canvas_id that render returned. Then update_task(status done, summary, result {text}).",
   answer: "Find the answer with the tools (weather, web_search, fetch_json, run_python). Give it as a one-sentence notify toast (kind success) AND update_task(status done, summary = the answer in one short sentence, result {text}).",
   background: "Do the work with the tools available. If the result is something to look at (a chart, a comparison, a list), render it on the canvas; otherwise the summary is enough. Finish with update_task(status done, summary, result {text}).",
 };

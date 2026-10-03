@@ -17,7 +17,7 @@ const appFile = (id: string) => path.join(paths.appDir(id), "app.json");
 export function defaultSize(spec: CanvasSpec): WidgetSize {
   const types = Object.values(spec.components).map((c) => c.type);
   const has = (t: string) => types.includes(t);
-  if (has("CardStack") || has("List") || has("Form") || has("Checklist") || has("Notebook") || has("TaskList")) return "L";
+  if (has("CardStack") || has("List") || has("Form") || has("Checklist") || has("Notebook") || has("TaskList") || has("Custom")) return "L";
   if (has("Chart")) return "W";
   if (has("KeyValue")) {
     const kv = Object.values(spec.components).find((c) => c.type === "KeyValue");

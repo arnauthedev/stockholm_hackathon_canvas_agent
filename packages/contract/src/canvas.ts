@@ -26,6 +26,9 @@ export const FormField = z.object({
 });
 export const TaskListItem = z.object({ id: z.string(), title: z.string(), status: z.string(), kind: z.string() });
 
+/** Size cap for a Custom card's HTML (characters). */
+export const CUSTOM_HTML_MAX = 60_000;
+
 /** Props for each catalog type (B6). Every prop may be a `$bind`. */
 export const ComponentProps = {
   Column: z.object({ gap: b(z.number()).optional(), align: b(z.enum(["start", "center", "end", "stretch"])).optional() }),
@@ -54,6 +57,9 @@ export const ComponentProps = {
   Checklist: z.object({ items: b(z.array(z.object({ id: z.string().optional(), text: z.string(), done: z.boolean().optional() }))), addable: b(z.boolean()).optional() }),
   Notebook: z.object({ lines: b(z.array(z.union([z.string(), z.object({ id: z.string().optional(), text: z.string() })]))).optional(), placeholder: b(z.string()).optional() }),
   Divider: z.object({}),
+  // Last resort when nothing above can show it: a self-contained HTML page written by a sub-agent, run
+  // sandboxed on the phone (no network, no access to the app); it gets the data via window.card.
+  Custom: z.object({ html: b(z.string().max(CUSTOM_HTML_MAX)) }),
 } as const;
 export type ComponentType = keyof typeof ComponentProps;
 export const COMPONENT_TYPES = Object.keys(ComponentProps) as ComponentType[];

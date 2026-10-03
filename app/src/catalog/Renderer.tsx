@@ -5,6 +5,7 @@ import { CardStack } from "./CardStack.tsx";
 import { Chart } from "./Chart.tsx";
 import { Checklist, Notebook } from "./Lists.tsx";
 import { Ctx, type RenderCtx } from "./context.ts";
+import { CustomCard } from "./CustomCard.tsx";
 import * as B from "./basic.tsx";
 
 class Boundary extends ReactComponent<{ type: string; children: ReactNode }, { err: string | null }> {
@@ -52,6 +53,7 @@ function Node({ id, spec, data, seen }: { id: string; spec: CanvasSpec; data: un
     case "Checklist": el = <Checklist id={id} {...p} />; break;
     case "Notebook": el = <Notebook id={id} {...p} />; break;
     case "Divider": el = <B.Divider />; break;
+    case "Custom": el = <CustomCard html={p.html} data={data} />; break;
     default: el = <B.Unsupported type={c.type} />;
   }
   return <Boundary type={c.type}>{el}</Boundary>;

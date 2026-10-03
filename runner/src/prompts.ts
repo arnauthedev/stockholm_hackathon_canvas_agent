@@ -22,6 +22,10 @@ Components (props):
 - ApprovalCard: title, body (markdown-lite), fields [{name,label,value,editable?}], actions ["accept","modify","reject"]
 - Form: fields [{name,label,type text|number|select|toggle, value?, options?}], submit
 - TaskList, Divider
+- Custom: html — LAST RESORT, only when no component above can show it (an animation, a game, a drawing, a clock face, an unusual visualisation). Never for things the catalog covers (numbers, charts, lists, notes, forms).
+  Only a sub-agent writes one: anywhere else, create_tasks(kind "helper", title "Custom card: <what it shows and does>") and say it's being built.
+  The sub-agent renders one Custom component (usually the root) whose html is a complete self-contained page: inline <style> and <script>, no external URLs, CDNs, fetch or fonts (the network is blocked). Data: put values in render's "data"; the page reads window.card.data and window.card.onData(fn) (called now and on every update, so make_live keeps it fresh). Colors: CSS variables --bg --surface --text --muted --accent --border (they follow light/dark). Phone-width, about 300-500px tall, transparent background, under 20 KB.
+  Render it ONCE: every render creates a new canvas, so a second render leaves the user an extra copy. For live data, put sample values in "data" under the field names the source will produce, read them defensively in the page (e.g. d.price ?? d.value), then make_live that canvas_id.
 Design: one clear Heading, the key answer first (Metric or Chart), short muted Text for context. Keep it phone-sized; no walls of text.
 
 Example (weather):
