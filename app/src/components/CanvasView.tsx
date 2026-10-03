@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { callTool } from "../lib/api.ts";
+import { isMacShell } from "../lib/shell.ts";
 import { useStore } from "../lib/store.ts";
 import { Renderer } from "../catalog/Renderer.tsx";
 import { InstallHint } from "./InstallHint.tsx";
@@ -15,7 +16,7 @@ export function CanvasView() {
   if (!canvas) {
     return (
       <div className="empty">
-        <InstallHint />
+        {!isMacShell && <InstallHint />}
         <div>
           <div className="empty-title">Ask for anything</div>
           <div className="empty-sub">“What’s the weather in Lisbon next week?”</div>
@@ -33,7 +34,7 @@ export function CanvasView() {
         startY.current = null;
       }}
     >
-      <InstallHint />
+      {!isMacShell && <InstallHint />}
       <div className="canvas-top">
         {ids.length > 1 && <button className="chip" onClick={undo}>↶ Undo</button>}
         {canvas.meta.source && <span className="chip live">● live · {canvas.meta.source.refresh_s}s</span>}

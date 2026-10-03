@@ -316,3 +316,19 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
 .c-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px; border-bottom: 1px solid var(--border); }
 .render.compact .c-add, .render.compact .c-rm { display: none; }
 .render.compact .c-check { min-height: 30px; padding: 2px 4px; }
+
+/* Mac notch app (mac/, app/src/lib/shell.ts): the page hangs from the notch in a black panel. No phone chrome,
+   smaller controls, a landscape camera preview. The shell forces the dark appearance. */
+.shell-mac { --safe-top: 0px; --safe-bottom: 0px; --bar-h: 72px; }
+.shell-mac body { font-size: 15px; }
+.shell-mac .bottombar { padding: 0 92px; }
+.shell-mac .talk-btn { width: 58px; height: 58px; box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
+.shell-mac .talk-btn svg { width: 24px; height: 24px; }
+.shell-mac .side-btn { width: 42px; height: 42px; }
+.shell-mac .side-btn svg { width: 19px; height: 19px; }
+.shell-mac .side-btn:hover, .shell-mac .dot:hover::after, .shell-mac .chip:hover { filter: brightness(1.15); }
+.shell-mac .sheet { border-radius: 18px; }
+.shell-mac .text-row input { font-size: 15px; padding: 10px 12px; }
+.shell-mac .c-h1 { font-size: 26px; } .shell-mac .c-h2 { font-size: 20px; } .shell-mac .c-h3 { font-size: 17px; }
+.shell-mac .camera { width: 160px; height: 120px; }
+.shell-mac .transcript { max-height: 36%; }

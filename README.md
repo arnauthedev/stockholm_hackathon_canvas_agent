@@ -6,6 +6,14 @@ A mobile PWA that is almost nothing on its own. It has an empty canvas, a Talk b
 - Run locally: [deploy/local.md](deploy/local.md)
 - Run on Matrix OS: [deploy/matrix.md](deploy/matrix.md) (setup, limits, troubleshooting)
 
+## Mac notch app
+
+The same app on a MacBook, in a panel that hangs from the notch: hover to open, Talk, Text, Live vision, Photo, canvas, pinned screens, tasks. It talks to the same runner, so what you pin on the phone shows on the Mac. Build and pairing: [deploy/mac.md](deploy/mac.md).
+
+```bash
+bash scripts/mac-run.sh --matrix    # build with the Command Line Tools, launch paired to the Matrix instance
+```
+
 ## Demo on Matrix OS
 
 The demo instance runs on a Matrix OS cloud computer, in `~/projects/canvas-agent`, tracking `main`. The laptop is where code gets written. All commands below run on the laptop, from the repo root, with the Matrix CLI logged in (`matrix login`).
@@ -40,7 +48,8 @@ Step 4 is needed because iOS gives Home Screen apps their own storage: the token
 - `.env` on Matrix is separate from the laptop's. After changing a key locally, upload it with `matrix upload .env projects/canvas-agent/.env --secret --force`, then run `bash scripts/matrix-deploy.sh`.
 
 ```
-app/                PWA (Vite + React)
+app/                PWA (Vite + React); app/src/lib/shell.ts is the Mac notch mode
+mac/                Mac notch app: Swift shell around the PWA (deploy/mac.md)
 runner/             Hono runner: tools, WS bus, file watcher, cron, sub-agents, voice sideband
 packages/contract/  zod schemas: tool contract, canvas spec, file formats, bus events
 config/routes.ts    provider routing table

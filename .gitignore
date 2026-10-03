@@ -12,3 +12,7 @@ dev-dist/
 __pycache__/
 *.tsbuildinfo
 /full_specs/
+
+# Mac notch app build output
+mac/.build/
+mac/dist/

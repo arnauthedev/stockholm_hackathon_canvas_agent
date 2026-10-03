@@ -3,6 +3,7 @@ import type { TaskEntry } from "@canvas-agent/contract";
 import { useStore } from "../lib/store.ts";
 import { openLink } from "../lib/links.ts";
 import { api } from "../lib/api.ts";
+import { isMacShell } from "../lib/shell.ts";
 import { NotifyButton } from "./NotifyButton.tsx";
 import { callTool } from "../lib/api.ts";
 import type { TriggerJson } from "@canvas-agent/contract";
@@ -109,7 +110,7 @@ export function TasksView() {
   return (
     <div className="tasks-panel">
       <Scheduled />
-      <h2 className="panel-title">Tasks {list.length > 0 && <span className="muted">{active} open</span>}<span className="spacer" /><NotifyButton /><ResetButton /></h2>
+      <h2 className="panel-title">Tasks {list.length > 0 && <span className="muted">{active} open</span>}<span className="spacer" />{!isMacShell && <NotifyButton />}<ResetButton /></h2>
       {list.length ? (
         <ul className="tasks">{list.map((t) => <TaskRow key={t.task.id} t={t} />)}</ul>
       ) : (
