@@ -1,0 +1,14 @@
+# Local spec documents, not part of the repo
+full_specs/
+
+# Secrets
+.env
+.env.*
+
+# Dependencies and environments
+node_modules/
+.venv/
+__pycache__/
+
+# OS / editor
+.DS_Store
