@@ -33,7 +33,8 @@ interface State {
   busy: string | null;
   activity: ActivityEntry[];
   triggers: TriggerJson[];
-  page: number; // pager index: 0 canvas, 1+ screens
+  page: number; // index of the home screen shown
+  canvasOpen: boolean; // the canvas layer is faded in over the home screens
   tasksOpen: boolean;
   hydrate(s: StateSnapshot): void;
   apply(e: ServerEvent): void;
@@ -74,6 +75,7 @@ export const useStore = create<State>((set, get) => ({
   activity: [],
   triggers: [],
   page: 0,
+  canvasOpen: false,
   tasksOpen: false,
   set: (p) => set(p),
   hydrate: (s) =>
@@ -102,6 +104,8 @@ export const useStore = create<State>((set, get) => ({
     } else {
       set({ transcript: [...lines, { id: ++seq, role, text, final, at: Date.now() }].slice(-30) });
     }
+    // a call started from the home screens brings the canvas in once the agent answers
+    if (role === "agent" && get().voiceLive && !get().canvasOpen) set({ canvasOpen: true });
   },
   apply: (e) => {
     const s = get();
@@ -111,7 +115,7 @@ export const useStore = create<State>((set, get) => ({
         const latest = ids[ids.length - 1];
         // results produced by background tasks show up without yanking the user to the canvas page
         const jump = e.canvas.id !== s.canvas?.id && !e.canvas.meta.task_id;
-        if (!s.canvas || e.canvas.id === latest) set({ canvas: e.canvas, canvasIds: ids, page: jump ? 0 : s.page });
+        if (!s.canvas || e.canvas.id === latest) set({ canvas: e.canvas, canvasIds: ids, canvasOpen: jump || s.canvasOpen });
         else set({ canvasIds: ids });
         break;
       }
@@ -195,7 +199,7 @@ export const useStore = create<State>((set, get) => ({
         set({ activity: [...s.activity, e.entry].slice(-300) });
         break;
       case "reset":
-        set({ transcript: [], modals: [], link: null, busy: null, page: 0, tasksOpen: false, canvas: null, canvasIds: [], apps: {}, tasks: {} });
+        set({ transcript: [], modals: [], link: null, busy: null, page: 0, canvasOpen: false, tasksOpen: false, canvas: null, canvasIds: [], apps: {}, tasks: {} });
         void api<StateSnapshot>("/api/state").then((st) => get().hydrate(st));
         break;
     }

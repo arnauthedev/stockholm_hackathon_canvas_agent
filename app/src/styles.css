@@ -74,6 +74,26 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
 .dot::after { content: ""; position: absolute; left: 5px; right: 5px; top: 11px; height: 6px; border-radius: 3px; background: var(--muted); opacity: .35; transition: opacity .25s, background .25s; }
 .dot.on { width: 30px; }
 .dot.on::after { opacity: 1; background: var(--text); }
+.dots, .home-handle { transition: opacity .3s ease; }
+.app.canvas-open .dots, .app.canvas-open .home-handle { opacity: 0; pointer-events: none; }
+/* Home: no buttons, so the screens use the space; a handle at the bottom opens the canvas */
+.app.home .page { padding-bottom: calc(var(--safe-bottom) + 40px); }
+.app.home .sheet-backdrop { bottom: 0; }
+.home-handle { position: fixed; z-index: 5; left: 50%; translate: -50% 0; bottom: calc(var(--safe-bottom) + 4px); width: 120px; height: 28px; border: 0; background: none; padding: 0; }
+.home-handle::after { content: ""; position: absolute; left: 34px; right: 34px; top: 12px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .45; }
+.pull-talk {
+  position: fixed; z-index: 16; top: calc(var(--safe-top) + 44px); left: 50%; display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+  font-size: 14px; font-weight: 600; box-shadow: 0 6px 18px rgb(0 0 0 / .12); pointer-events: none;
+}
+.pull-talk.ready { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+/* Canvas: a layer that fades in over the home screens */
+.canvas-layer {
+  position: fixed; inset: 0; z-index: 6; background: var(--bg); overflow-y: auto;
+  padding: calc(var(--safe-top) + 40px) var(--space) calc(var(--bar-h) + var(--safe-bottom) + 24px);
+  opacity: 0; transform: scale(.98); visibility: hidden; transition: opacity .3s ease, transform .3s ease, visibility 0s linear .3s;
+}
+.canvas-layer.open { opacity: 1; transform: none; visibility: visible; transition: opacity .3s ease, transform .3s ease; }
 .empty { position: relative; height: 100%; display: grid; place-items: center; color: var(--muted); text-align: center; }
 
 /* Bottom bar */
@@ -82,7 +102,9 @@ input, textarea, select { font: inherit; color: var(--text); -webkit-user-select
   height: calc(var(--bar-h) + var(--safe-bottom)); padding: 0 20px var(--safe-bottom);
   display: flex; align-items: center; justify-content: space-between;
   background: linear-gradient(to top, var(--bg) 60%, transparent);
+  transition: opacity .3s ease, transform .3s ease;
 }
+.bottombar.away { opacity: 0; transform: translateY(24px); }
 .side-btn {
   width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--border);
   background: var(--surface); display: grid; place-items: center; box-shadow: 0 1px 3px rgb(0 0 0 / .08);

@@ -4,6 +4,8 @@ import { unlockAudio } from "../lib/sound.ts";
 export type TalkState = "idle" | "connecting" | "live" | "error";
 
 export function BottomBar(props: {
+  /** faded out: the home screens show without the buttons */
+  away: boolean;
   talk: TalkState;
   onTalk(): void;
   onText(): void;
@@ -16,7 +18,7 @@ export function BottomBar(props: {
   const label = { idle: "Talk", connecting: "Connecting…", live: "Listening — tap to stop", error: "Retry" }[props.talk];
   const visionLabel = { idle: "Live vision: talk while showing the camera", connecting: "Connecting live vision…", live: "Stop live vision", error: "Retry live vision" }[props.vision];
   return (
-    <footer className="bottombar">
+    <footer className={`bottombar ${props.away ? "away" : ""}`} inert={props.away}>
       <button className="side-btn" aria-label="Type a message" onClick={() => (unlockAudio(), props.onText())}>
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z" /></svg>
       </button>

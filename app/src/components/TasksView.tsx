@@ -71,7 +71,7 @@ function TaskRow({ t }: { t: TaskEntry }) {
           {r?.canvas_id && ids.includes(r.canvas_id) && (
             <button className="btn" onClick={() => {
               void api(`/api/canvas/${r.canvas_id}/show`, { method: "POST" });
-              set({ page: 0, tasksOpen: false });
+              set({ canvasOpen: true, tasksOpen: false });
             }}>Show result</button>
           )}
           {!r && t.task.details && <p className="muted">{t.task.details}</p>}

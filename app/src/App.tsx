@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BottomBar, type TalkState } from "./components/BottomBar.tsx";
 import { CameraPanel } from "./components/CameraPanel.tsx";
-import { CanvasView } from "./components/CanvasView.tsx";
+import { CanvasLayer } from "./components/CanvasView.tsx";
 import { LinkPrompt, ModalSheet, Toasts, TranscriptOverlay } from "./components/Overlay.tsx";
 import { Pager } from "./components/Pager.tsx";
 import { ScreenView } from "./components/ScreensView.tsx";
@@ -11,6 +11,7 @@ import { PhotoSheet } from "./components/PhotoSheet.tsx";
 import { SettingsSheet } from "./components/SettingsSheet.tsx";
 import { pairWith, token } from "./lib/api.ts";
 import { connectBus } from "./lib/bus.ts";
+import { unlockAudio } from "./lib/sound.ts";
 import { useStore } from "./lib/store.ts";
 import { applyTheme } from "./lib/theme.ts";
 import { PhoneVoice, type CallMode } from "./lib/voice.ts";
@@ -18,6 +19,7 @@ import { PhoneVoice, type CallMode } from "./lib/voice.ts";
 export function App() {
   const theme = useStore((s) => s.theme);
   const screens = useStore((s) => s.screens);
+  const canvasOpen = useStore((s) => s.canvasOpen);
   // One call at a time: `call` is its state, `mode` which button started it (Talk or Live vision).
   const [call, setCall] = useState<TalkState>("idle");
   const [mode, setMode] = useState<CallMode>("voice");
@@ -67,8 +69,8 @@ export function App() {
       else if (h.startsWith("app=")) {
         const slug = decodeURIComponent(h.slice(4));
         const i = s.screens?.screens.findIndex((sc) => sc.id === s.apps[slug]?.app.screen) ?? -1;
-        s.set({ page: i >= 0 ? 1 + i : 0 });
-      } else if (h === "approval") s.set({ page: 0 });
+        s.set({ page: Math.max(i, 0), canvasOpen: false });
+      } // #approval: the approval sheet shows over whatever is on screen
     };
     if (/#(task|app)=|#approval/.test(location.hash)) {
       setTimeout(() => go(location.hash), 600); // after state hydrates
@@ -85,20 +87,26 @@ export function App() {
   if (!token) return <PairScreen />;
 
   const screenList = screens?.screens ?? [{ id: "s1" }];
-  const pages = [
-    { key: "canvas", label: "Canvas", node: <CanvasView /> },
-    ...screenList.map((s, i) => ({ key: s.id, label: `Screen ${i + 1}`, node: <ScreenView screenId={s.id} /> })),
-  ];
+  const pages = screenList.map((s, i) => ({ key: s.id, label: `Screen ${i + 1}`, node: <ScreenView screenId={s.id} /> }));
+  // the buttons belong to the canvas; on the home screens they show only while a call is up
+  const inCall = call === "connecting" || call === "live";
+  const pullTalk = () => {
+    if (inCall) return;
+    unlockAudio();
+    onCall("voice");
+  };
 
   return (
-    <div className="app">
+    <div className={`app ${canvasOpen ? "canvas-open" : "home"}`}>
       <TopBar onSettings={() => setSettingsOpen(true)} />
       <Toasts />
-      <Pager pages={pages} />
+      <Pager pages={pages} onPullTalk={pullTalk} />
+      <CanvasLayer />
       <TranscriptOverlay visible />
       <LinkPrompt />
       {cameraOpen && voiceVideo && <CameraPanel send={sendFrame} onClose={closeCamera} />}
       <BottomBar
+        away={!canvasOpen && !inCall}
         talk={mode === "voice" ? call : "idle"}
         onTalk={() => onCall("voice")}
         vision={mode === "vision" ? call : "idle"}
@@ -115,12 +123,16 @@ export function App() {
   );
 }
 
-/** Top-left buttons: settings, and tasks with a badge for open ones (red when something needs you). */
+// touch devices open/close the canvas by swiping; mouse and trackpad get a top-bar button
+const coarse = matchMedia("(pointer: coarse)").matches;
+
+/** Top-left buttons: settings, tasks with a badge for open ones (red when something needs you), canvas toggle without touch. */
 function TopBar({ onSettings }: { onSettings(): void }) {
   const connected = useStore((s) => s.connected);
   const tasks = Object.values(useStore((s) => s.tasks));
   const open = tasks.filter((t) => !["done", "cancelled", "failed"].includes(t.task.status)).length;
   const needsYou = tasks.some((t) => t.task.status === "waiting_user");
+  const canvasOpen = useStore((s) => s.canvasOpen);
   return (
     <>
       <div className={connected ? "conn ok" : "conn"} title={connected ? "Connected" : "Offline"} />
@@ -138,6 +150,13 @@ function TopBar({ onSettings }: { onSettings(): void }) {
           </svg>
           {open > 0 && <span className={`top-badge ${needsYou ? "alert" : ""}`}>{open}</span>}
         </button>
+        {!coarse && (
+          <button className="top-btn" aria-label={canvasOpen ? "Back to screens" : "Open the canvas"} aria-pressed={canvasOpen} onClick={() => useStore.getState().set({ canvasOpen: !canvasOpen })}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+              {canvasOpen ? <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" /> : <path d="M4 5h16v14H4zM8 9h8M8 13h5" />}
+            </svg>
+          </button>
+        )}
       </div>
     </>
   );

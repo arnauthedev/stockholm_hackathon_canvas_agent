@@ -44,7 +44,7 @@ export function PhotoSheet({ file, onClose }: { file: File | null; onClose(): vo
       const j = (await res.json()) as { error?: string; session_id?: string };
       if (!res.ok || j.error) throw new Error(j.error ?? res.statusText);
       if (j.session_id) setTextSessionId(j.session_id);
-      useStore.getState().set({ page: 0 });
+      useStore.getState().set({ canvasOpen: true });
       onClose();
     } catch (e) {
       useStore.getState().toast({ text: `Photo: ${e instanceof Error ? e.message : String(e)}`, kind: "error" });
