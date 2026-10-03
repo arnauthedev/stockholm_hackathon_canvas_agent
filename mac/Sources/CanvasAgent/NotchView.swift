@@ -13,7 +13,9 @@ final class NotchView: NSView {
   var onMouseDown: ((NSPoint) -> Void)?
   var onHover: ((Bool) -> Void)?
 
-  /// Where the web pane lives; clipped to the rounded bottom. Flipped, so the pane stays anchored to the top while the panel grows.
+  /// Where the web pane lives; clipped to the rounded bottom. Flipped, so the pane stays anchored to the top while
+  /// the panel grows. Never hidden: folded, its height is 0 and the clip hides the page, but WebKit still treats the
+  /// page as visible, so the bus connection, timers and a running call carry on under the notch.
   let content = FlippedView()
   private let fill = CAShapeLayer()
   private let stroke = CAShapeLayer()
@@ -57,7 +59,6 @@ final class NotchView: NSView {
     stroke.path = path
     content.frame = CGRect(x: f, y: stripHeight, width: bounds.width - 2 * f, height: max(0, bounds.height - stripHeight))
     content.layer?.cornerRadius = cornerRadius
-    content.isHidden = collapsed
     dot.isHidden = !collapsed
     dot.position = CGPoint(x: bounds.width - f - 16, y: stripHeight / 2)
     CATransaction.commit()

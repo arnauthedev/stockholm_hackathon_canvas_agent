@@ -46,7 +46,15 @@ export function sendUiEvent(e: Omit<UiEvent, "type" | "at">) {
 
 /** Tell the runner whether the app is in the foreground (pushes are skipped while it is). */
 function sendPresence() {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "presence", visible: document.visibilityState === "visible" }));
+  const visible = shellVisible ?? document.visibilityState === "visible";
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "presence", visible }));
+}
+
+/** The Mac notch app keeps its page visible while folded, so it says itself when the user can see it. */
+let shellVisible: boolean | null = null;
+export function setShellVisible(v: boolean) {
+  shellVisible = v;
+  sendPresence();
 }
 
 document.addEventListener("visibilitychange", () => {

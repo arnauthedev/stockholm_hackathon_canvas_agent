@@ -96,9 +96,9 @@ final class NotchController: NSObject, WebPaneDelegate {
     view.cornerRadius = on ? 22 : 12
     if on { view.collapsed = false }  // show the content as the panel grows; hide it after it has shrunk
     let target = frame(expanded: on)
+    pane.setFolded(!on)
     guard animated else {
       panel.setFrame(target, display: true)
-      pane.alphaValue = on ? 1 : 0
       view.collapsed = !on
       return
     }
@@ -106,7 +106,6 @@ final class NotchController: NSObject, WebPaneDelegate {
       ctx.duration = on ? 0.34 : 0.26
       ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
       self.panel.animator().setFrame(target, display: true)
-      self.pane.animator().alphaValue = on ? 1 : 0
     }, completionHandler: { [weak self] in
       guard let self else { return }
       if !on && !self.expanded { self.view.collapsed = true }
@@ -117,7 +116,8 @@ final class NotchController: NSObject, WebPaneDelegate {
   // MARK: open / fold
 
   private var mustStayOpen: Bool { held || pane.state.editing || pane.modalOpen }
-  private var mouseInside: Bool { panel.frame.contains(NSEvent.mouseLocation) }
+  /// Tolerant: a cursor pinned to the top edge of the screen reads as y == maxY, just outside the frame.
+  private var mouseInside: Bool { panel.frame.insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation) }
 
   func expand(hold: Bool) {
     hoverTimer?.invalidate()
@@ -144,11 +144,12 @@ final class NotchController: NSObject, WebPaneDelegate {
 
   private func hover(_ inside: Bool) {
     hoverTimer?.invalidate()
+    NSLog(inside ? "hover in" : "hover out")
     if inside {
       guard !expanded else { return }
+      // No position check here: the tracking area said the cursor is in, and leaving cancels this timer.
       hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: false) { [weak self] _ in
-        guard let self, self.mouseInside else { return }
-        self.expand(hold: false)
+        self?.expand(hold: false)
       }
     } else {
       guard expanded, !mustStayOpen else { return }

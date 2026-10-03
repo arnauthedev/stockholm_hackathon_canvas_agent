@@ -75,6 +75,11 @@ final class WebPane: NSView {
     if let pairing { load(pairing) }
   }
 
+  /// Folded or open: the page passes this on as its presence, so the phone still gets notifications while the Mac app is folded.
+  func setFolded(_ folded: Bool) {
+    web.evaluateJavaScript("window.dispatchEvent(new CustomEvent('shell:folded', { detail: \(folded) }))")
+  }
+
   func show(_ text: String?) {
     message.stringValue = text ?? ""
     message.isHidden = text == nil
@@ -102,7 +107,7 @@ extension WebPane: WKScriptMessageHandler {
   func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
     guard let d = m.body as? [String: Any], d["type"] as? String == "state" else { return }
     state = State(connected: d["connected"] as? Bool ?? false, live: d["live"] as? Bool ?? false, editing: d["editing"] as? Bool ?? false)
-    NSLog("page state: connected=%d live=%d editing=%d", state.connected, state.live, state.editing)
+    NSLog("page state: connected=%d live=%d editing=%d visibility=%@", state.connected, state.live, state.editing, d["visibility"] as? String ?? "?")
   }
 }
 
