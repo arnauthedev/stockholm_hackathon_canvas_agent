@@ -10,7 +10,7 @@ import { bus } from "./bus.ts";
 import { env } from "./env.ts";
 import { hub } from "./events.ts";
 import { exists, lock, now, readJson, slugify, writeJson } from "./fsutil.ts";
-import { runSource, scheduleApp, stageSource, syncCanvasJob, unscheduleApp } from "./jobs.ts";
+import { runSource, scheduleApp, sourceRef, stageSource, syncCanvasJob, unscheduleApp } from "./jobs.ts";
 import { runPython } from "./python.ts";
 import {
   activeTheme, createCanvas, isCanvasId, latestCanvasId, listAppIds, listCanvasIds, listTaskIds, listThemes,
@@ -49,7 +49,7 @@ const handlers: { [N in ToolName]: Handler<N> } = {
     const extra: Record<string, string> = {};
     let source: SourceRef | undefined;
     if (a.source) {
-      source = a.source.type === "python" ? { type: "python", entry: "fetch.py", refresh_s: a.source.refresh_s } : { type: "http", entry: a.source.url, refresh_s: a.source.refresh_s, json_path: a.source.json_path };
+      source = sourceRef(a.source);
       if (a.source.type === "python") extra["fetch.py"] = a.source.code;
     }
     const id = await createCanvas(v.spec, a.data, { title: a.title ?? v.spec.title, prompt: ctx.prompt, session_id: ctx.session_id, source, task_id: ctx.task_id }, extra);

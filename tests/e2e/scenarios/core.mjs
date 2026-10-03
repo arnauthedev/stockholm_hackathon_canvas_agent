@@ -209,6 +209,66 @@ export default [
     },
   },
 
+  {
+    name: "tool: binance stream updates live; pin keeps streaming; alert fires once; unpin stops",
+    tags: ["tool"],
+    async run({ home }) {
+      const r = await tool("render", { title: "BTC", spec: { root: "m", components: { m: { type: "Metric", props: { label: "BTC", value: { $bind: "/price" }, unit: { $bind: "/currency" }, delta: { $bind: "/change_pct" }, trend: { $bind: "/trend" } } } } }, data: {}, source: { type: "stream", provider: "binance", symbol: "BTCUSDT" } });
+      const file = homeFile(home, `canvas/${r.canvas_id}/data.json`);
+      const seen = new Set();
+      const t0 = Date.now();
+      while (Date.now() - t0 < 6000) {
+        const d = readJsonSafe(file);
+        if (d?.updated_at) seen.add(d.updated_at);
+        await sleep(250);
+      }
+      const d = readJsonSafe(file);
+      const pin = await tool("pin", { slug: "btc" });
+      const w = await tool("watch", { target: "btc", path: "/price", op: ">", value: 1, message: "BTC above 1" });
+      // the pinned widget opens its own connection (Binance can take ~3 s to send the first message)
+      await waitFor(async () => ((await api("/api/monitor")).activity ?? []).some((a) => a.title === "alert fired: BTC"), { timeout: 10_000, label: "alert" }).catch(() => {});
+      await sleep(2500); // and it must not fire again while it stays true
+      const fired = ((await api("/api/monitor")).activity ?? []).filter((a) => a.title === "alert fired: BTC").length;
+      const jobs1 = (await api("/api/monitor")).jobs.map((j) => j.key);
+      await tool("unpin", { app_id: "btc" });
+      await sleep(500);
+      const jobs2 = (await api("/api/monitor")).jobs.map((j) => j.key);
+      const ok = seen.size >= 4 && typeof d.price === "number" && /%$/.test(d.change_pct) && pin.live && w.ok && fired === 1 && jobs1.includes("app:btc") && !jobs2.includes("app:btc");
+      return { pass: ok, info: `updates in 6s=${seen.size} price=${d.price} ${d.change_pct} alertFired=${fired} jobs before/after unpin=${jobs1.join(",")} / ${jobs2.join(",")}` };
+    },
+  },
+  {
+    name: "tool: http source polls every 5 s",
+    tags: ["tool"],
+    async run({ home }) {
+      const r = await tool("render", { title: "BTC http", spec: { root: "m", components: { m: { type: "Metric", props: { label: "BTC", value: { $bind: "/price" } } } } }, data: {}, source: { type: "http", url: "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", refresh_s: 5 } });
+      const file = homeFile(home, `canvas/${r.canvas_id}/data.json`);
+      const first = readJsonSafe(file)?.updated_at;
+      await sleep(11_500);
+      const runs = (await api("/api/monitor")).jobs.find((j) => j.key === `canvas:${r.canvas_id}`)?.runs ?? 0;
+      const d = readJsonSafe(file);
+      return { pass: runs >= 2 && d.updated_at !== first && !!d.price, info: `runs in 11.5s=${runs} price=${d.price}` };
+    },
+  },
+  {
+    name: "ui: streamed price changes on the phone in real time",
+    tags: ["ui"],
+    async run() {
+      await tool("render", { title: "BTC", spec: { root: "m", components: { m: { type: "Metric", props: { label: "BTC", value: { $bind: "/price" }, unit: { $bind: "/currency" }, delta: { $bind: "/change_pct" }, trend: { $bind: "/trend" } } } } }, data: {}, source: { type: "stream", provider: "binance", symbol: "BTCUSDT" } });
+      const p = await phone();
+      try {
+        await p.page.waitForSelector(".c-metric-value");
+        const n0 = p.events.length;
+        await sleep(5000);
+        const updates = p.events.slice(n0).filter((e) => e.type === "canvas").length;
+        const text = await p.page.locator(".c-metric-value").textContent();
+        return { pass: updates >= 4 && /\d/.test(text), info: `canvas updates in 5s=${updates} shown=${text}` };
+      } finally {
+        await p.close();
+      }
+    },
+  },
+
   // ---------------- text brain ----------------
   {
     name: "text: quick question → no task",
@@ -352,6 +412,18 @@ export default [
       const s2 = (await tool("read_widget", { target: pin.app_id })).widgets[0].state.items.join("|").toLowerCase();
       const ok = s1.done.includes("Passport") && /oat milk/.test(s2) && /eggs/.test(s2);
       return { pass: ok, info: `done=${s1.done.join(",")} shopping=${s2}` };
+    },
+  },
+
+  {
+    name: "text: 'Bitcoin price in real time' uses a stream",
+    tags: ["text"],
+    async run() {
+      await chat("Show me the Bitcoin price in real time", "e2e-stream");
+      const c = await tool("get_state", { scope: "canvas" });
+      const id = c.canvas?.id;
+      const job = (await api("/api/monitor")).jobs.find((j) => j.key === `canvas:${id}`);
+      return { pass: !!job && /binance/.test(job.source), info: `canvas=${c.canvas?.title} job=${job?.key} source=${job?.source}` };
     },
   },
 

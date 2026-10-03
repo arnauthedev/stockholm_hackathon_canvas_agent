@@ -7,12 +7,14 @@ import { latestCanvasId, listAppIds, paths, readApp, readCanvas } from "./store.
 import { record } from "./monitor.ts";
 import { evaluateAlerts, type ScriptAlert } from "./alerts.ts";
 import { pushAll } from "./push.ts";
+import { firstValue, startStream } from "./streams.ts";
 
 /**
  * Live data sources: `fetch.py` (python) or an http JSON URL, run on a node-cron
  * schedule for pinned apps. Scripts only ever change data.json in their own folder.
  */
-const tasks = new Map<string, ScheduledTask>();
+/** Running jobs: a cron task, an exact interval (sub-minute polling) or a live stream. */
+const tasks = new Map<string, { stop(): void }>();
 
 /** node-cron expression for a refresh period (sub-minute rounds to 30 s; else whole minutes/hours). */
 export function cronExpr(refresh_s: number): string {
@@ -23,13 +25,17 @@ export function cronExpr(refresh_s: number): string {
   return `0 0 */${h} * * *`;
 }
 
+/** Stored reference for a source (python code itself lives in fetch.py). */
+export function sourceRef(src: Source): SourceRef {
+  if (src.type === "python") return { type: "python", entry: "fetch.py", refresh_s: src.refresh_s };
+  if (src.type === "http") return { type: "http", entry: src.url, refresh_s: src.refresh_s, json_path: src.json_path };
+  return { type: "stream", entry: src.provider ? `${src.provider}:${src.symbol ?? ""}` : String(src.url ?? ""), refresh_s: 1, stream: { provider: src.provider, symbol: src.symbol, url: src.url, subscribe: src.subscribe, map: src.map } };
+}
+
 /** Write the source into `dir` and return its stored reference. */
 export async function stageSource(dir: string, src: Source): Promise<SourceRef> {
-  if (src.type === "python") {
-    await atomicWrite(path.join(dir, "fetch.py"), src.code);
-    return { type: "python", entry: "fetch.py", refresh_s: src.refresh_s };
-  }
-  return { type: "http", entry: src.url, refresh_s: src.refresh_s, json_path: src.json_path };
+  if (src.type === "python") await atomicWrite(path.join(dir, "fetch.py"), src.code);
+  return sourceRef(src);
 }
 
 export interface RunOutcome { ok: boolean; patch?: Record<string, unknown>; alerts?: ScriptAlert[]; data?: unknown; error?: string; stderr?: string; ms: number }
@@ -39,7 +45,11 @@ export async function runSource(dir: string, ref: SourceRef): Promise<RunOutcome
   const started = Date.now();
   let patch: Record<string, unknown> | null = null;
   try {
-    if (ref.type === "python") {
+    if (ref.type === "stream") {
+      const v = await firstValue(ref);
+      if (!v) return { ok: false, error: "no data from the stream within 8 s", ms: Date.now() - started };
+      patch = v;
+    } else if (ref.type === "python") {
       const r = await runPython({ file: path.join(dir, ref.entry), cwd: dir, timeout_s: 30 });
       if (r.timed_out) return { ok: false, error: "timeout after 30 s", stderr: r.stderr, ms: r.ms };
       if (r.exit_code !== 0) return { ok: false, error: `exit ${r.exit_code}`, stderr: r.stderr, ms: r.ms };
@@ -108,8 +118,32 @@ async function runJob(key: string, dir: string, ref: SourceRef, writeJobFile: bo
 
 function schedule(key: string, dir: string, ref: SourceRef, writeJobFile: boolean) {
   unschedule(key);
-  const t = cron.schedule(cronExpr(ref.refresh_s), () => void runJob(key, dir, ref, writeJobFile), { name: key, noOverlap: true });
-  tasks.set(key, t);
+  let handle: { stop(): void };
+  if (ref.type === "stream") {
+    // real-time: values are saved as they arrive (throttled); alerts checked on each save
+    handle = startStream(
+      dir,
+      ref,
+      (data) => {
+        const i = info.get(key);
+        if (i) Object.assign(i, { runs: i.runs + 1, last_run: now(), last_ok: now(), last_error: null });
+        if (key.startsWith("app:")) void evaluateAlerts(key.slice(4), data, []).catch(() => {});
+      },
+      (ok, err) => {
+        const i = info.get(key);
+        if (i && !ok) i.last_error = `stream: ${err ?? "disconnected"} (reconnecting)`;
+        record({ kind: "job", title: `${key} stream ${ok ? "connected" : "disconnected"}`, detail: err, ok });
+      },
+    );
+  } else if (ref.refresh_s < 60) {
+    // sub-minute polling (http ≥ 5 s): an exact interval instead of cron rounding
+    const t = setInterval(() => void runJob(key, dir, ref, writeJobFile), ref.refresh_s * 1000);
+    handle = { stop: () => clearInterval(t) };
+  } else {
+    const t: ScheduledTask = cron.schedule(cronExpr(ref.refresh_s), () => void runJob(key, dir, ref, writeJobFile), { name: key, noOverlap: true });
+    handle = { stop: () => (void t.stop(), void t.destroy()) };
+  }
+  tasks.set(key, handle);
   const prev = info.get(key);
   info.set(key, { key, refresh_s: ref.refresh_s, source: ref.type === "python" ? ref.entry : ref.entry.slice(0, 80), runs: prev?.runs ?? 0, last_run: prev?.last_run ?? null, last_ok: prev?.last_ok ?? null, last_error: prev?.last_error ?? null, last_ms: prev?.last_ms ?? null, running: false });
 }
@@ -117,8 +151,7 @@ function schedule(key: string, dir: string, ref: SourceRef, writeJobFile: boolea
 function unschedule(key: string) {
   const t = tasks.get(key);
   if (t) {
-    void t.stop();
-    void t.destroy();
+    t.stop();
     tasks.delete(key);
   }
 }

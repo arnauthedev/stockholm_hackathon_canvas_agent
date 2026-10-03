@@ -27,16 +27,26 @@ export const CANVAS_RING_SIZE = 10;
 
 export const Source = z.discriminatedUnion("type", [
   z.object({ type: z.literal("python"), code: z.string(), refresh_s: z.number().int().min(30).max(86400) }),
-  z.object({ type: z.literal("http"), url: z.string().url(), refresh_s: z.number().int().min(30).max(86400), json_path: z.string().optional() }),
+  z.object({ type: z.literal("http"), url: z.string().url(), refresh_s: z.number().int().min(5).max(86400), json_path: z.string().optional() }),
+  /** Real-time push over WebSocket: Binance preset (crypto, public, no key) or any WebSocket URL + field map. */
+  z.object({
+    type: z.literal("stream"),
+    provider: z.enum(["binance"]).optional().describe("binance: symbol like BTCUSDT; fields price, change_pct, change, trend, high, low, symbol, currency"),
+    symbol: z.string().optional(),
+    url: z.string().optional().describe("generic WebSocket URL (when not using a provider)"),
+    subscribe: z.unknown().optional().describe("message sent after connecting (generic)"),
+    map: z.record(z.string(), z.string()).optional().describe("data field → JSON pointer into each message (generic)"),
+  }),
 ]);
 export type Source = z.infer<typeof Source>;
 
 /** Stored form of a source (code lives in fetch.py next to it). */
 export const SourceRef = z.object({
-  type: z.enum(["python", "http"]),
+  type: z.enum(["python", "http", "stream"]),
   entry: z.string(),
   refresh_s: z.number().int(),
   json_path: z.string().optional(),
+  stream: z.object({ provider: z.enum(["binance"]).optional(), symbol: z.string().optional(), url: z.string().optional(), subscribe: z.unknown().optional(), map: z.record(z.string(), z.string()).optional() }).optional(),
 });
 export type SourceRef = z.infer<typeof SourceRef>;
 
