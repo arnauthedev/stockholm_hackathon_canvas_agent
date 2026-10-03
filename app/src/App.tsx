@@ -8,6 +8,7 @@ import { ScreenView } from "./components/ScreensView.tsx";
 import { TasksView } from "./components/TasksView.tsx";
 import { TextSheet } from "./components/TextSheet.tsx";
 import { PhotoSheet } from "./components/PhotoSheet.tsx";
+import { SettingsSheet } from "./components/SettingsSheet.tsx";
 import { pairWith, token } from "./lib/api.ts";
 import { connectBus } from "./lib/bus.ts";
 import { useStore } from "./lib/store.ts";
@@ -49,6 +50,7 @@ export function App() {
     else void v.stop();
   };
   const [textOpen, setTextOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
   const voiceVideo = useStore((s) => s.voiceVideo);
   const cameraOpen = useStore((s) => s.cameraOpen);
@@ -93,6 +95,9 @@ export function App() {
   return (
     <div className="app">
       <div className={connected ? "conn ok" : "conn"} title={connected ? "Connected" : "Offline"} />
+      <button className="settings-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" /></svg>
+      </button>
       <Toasts />
       <Pager pages={pages} />
       <TranscriptOverlay visible />
@@ -108,6 +113,7 @@ export function App() {
       />
       <TextSheet open={textOpen} onClose={() => setTextOpen(false)} />
       <PhotoSheet file={photo} onClose={() => setPhoto(null)} />
+      {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       <ModalSheet />
     </div>
   );

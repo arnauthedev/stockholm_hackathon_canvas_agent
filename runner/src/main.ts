@@ -26,6 +26,7 @@ import { addSubscription, pushAll, removeSubscription, subscriptionCount, vapidP
 import { runAppNow } from "./jobs.ts";
 import { handleUpload, serveUpload } from "./uploads.ts";
 import { startWatcher } from "./watcher.ts";
+import { currentSettings, isTalkVoice, loadSettings, saveSettings } from "./settings.ts";
 import { resumeTasks } from "./taskrunner.ts";
 
 // A background promise must never take the runner down (it serves the phone and live widgets).
@@ -33,6 +34,7 @@ process.on("unhandledRejection", (err) => console.error("[runner] unhandled reje
 process.on("uncaughtException", (err) => console.error("[runner] uncaught exception (kept running):", err));
 
 await initHome();
+await loadSettings();
 await (await import("./layout.ts")).migrateLayouts();
 const { resumeTriggers, listTriggers } = await import("./triggers.ts");
 const { startEmailWatch, checkEmail } = await import("./emailwatch.ts");
@@ -107,6 +109,13 @@ app.get("/api/voice/provider", (c) => {
   const v = route(c.req.query("mode") === "vision" ? "liveVision" : "voice");
   const key = v.provider === "google" ? env.GEMINI_API_KEY : env.OPENAI_API_KEY;
   return c.json({ provider: v.provider, model: v.model, video: v.provider === "google", ready: !!key });
+});
+// Settings sheet on the phone (agent-home/settings.json): which provider the Talk call uses.
+app.get("/api/settings", (c) => c.json(currentSettings()));
+app.put("/api/settings", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { talkVoice?: unknown };
+  if (!isTalkVoice(body.talkVoice)) return c.json({ error: "talkVoice must be openai or google" }, 400);
+  return c.json(await saveSettings({ talkVoice: body.talkVoice }));
 });
 // Voice (GPT-Live): phone sends its SDP offer, runner creates the session and attaches the sideband.
 app.post("/api/voice/session", async (c) => {
