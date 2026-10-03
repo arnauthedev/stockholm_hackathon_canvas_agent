@@ -18,6 +18,23 @@ function readToken(): string {
 
 export const token = readToken();
 
+/** This device's pairing link, for moving the token into a home-screen app (iOS gives it separate storage). */
+export const pairingLink = () => `${location.origin}/#token=${encodeURIComponent(token)}`;
+
+/** Accepts a pasted pairing link or a bare token; stores it and reloads. False if nothing usable. */
+export function pairWith(input: string): boolean {
+  const raw = input.trim();
+  const t = decodeURIComponent(raw.match(/token=([^&#\s]+)/)?.[1] ?? (/^[\w-]{16,}$/.test(raw) ? raw : ""));
+  if (!t) return false;
+  try {
+    localStorage.setItem(KEY, t);
+  } catch {
+    return false;
+  }
+  location.replace(location.pathname);
+  return true;
+}
+
 export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);

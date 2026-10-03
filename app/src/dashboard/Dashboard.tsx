@@ -66,7 +66,7 @@ export function Dashboard() {
     if (theme) applyTheme(theme);
   }, [theme]);
 
-  if (!token) return <main className="db-empty">Open the pairing link once on this device (it stores the token), then go to <code>/dashboard</code>.</main>;
+  if (!token) return <main className="db-empty">Open the pairing link once in this browser (it stores the token), then go to <code>/dashboard</code>.</main>;
 
   // merge the initial snapshot with live entries (dedupe by id)
   const seen = new Set<number>();

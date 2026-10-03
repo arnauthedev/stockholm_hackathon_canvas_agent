@@ -8,7 +8,7 @@ import { ScreenView } from "./components/ScreensView.tsx";
 import { TasksView } from "./components/TasksView.tsx";
 import { TextSheet } from "./components/TextSheet.tsx";
 import { PhotoSheet } from "./components/PhotoSheet.tsx";
-import { token } from "./lib/api.ts";
+import { pairWith, token } from "./lib/api.ts";
 import { connectBus } from "./lib/bus.ts";
 import { useStore } from "./lib/store.ts";
 import { applyTheme } from "./lib/theme.ts";
@@ -72,14 +72,7 @@ export function App() {
     if (theme) applyTheme(theme);
   }, [theme]);
 
-  if (!token) {
-    return (
-      <main className="pair">
-        <h1>Canvas Agent</h1>
-        <p>Open the pairing link printed by <code>scripts/dev.sh</code> on your computer to connect this phone.</p>
-      </main>
-    );
-  }
+  if (!token) return <PairScreen />;
 
   const screenList = screens?.screens ?? [{ id: "s1" }];
   const pages = [
@@ -107,5 +100,33 @@ export function App() {
       <PhotoSheet file={photo} onClose={() => setPhoto(null)} />
       <ModalSheet />
     </div>
+  );
+}
+
+/** Unpaired device. A home-screen app on iOS starts with empty storage, so it pairs by pasting the link. */
+function PairScreen() {
+  const [link, setLink] = useState("");
+  const [error, setError] = useState(false);
+  const submit = (value: string) => setError(!pairWith(value));
+  const paste = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      setLink(t);
+      submit(t);
+    } catch {
+      setError(true);
+    }
+  };
+  return (
+    <main className="pair">
+      <h1>Canvas Agent</h1>
+      <p>Open the pairing link from your computer on this device.</p>
+      <p>Added to the Home Screen? Paste the pairing link here once (Copy link in Safari, or copy it from the computer).</p>
+      <form className="text-row" onSubmit={(e) => (e.preventDefault(), submit(link))}>
+        <input value={link} onChange={(e) => (setLink(e.target.value), setError(false))} placeholder="https://…/#token=…" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+        {link.trim() ? <button className="btn primary">Connect</button> : <button type="button" className="btn primary" onClick={() => void paste()}>Paste</button>}
+      </form>
+      {error && <p className="pair-error">That isn't a pairing link.</p>}
+    </main>
   );
 }
