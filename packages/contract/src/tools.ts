@@ -45,7 +45,7 @@ export const ToolArgs = {
   resize_widget: z.object({ app_id: z.string(), size: WidgetSize.describe("S small, W wide, L large, T tall") }),
   unpin: z.object({ app_id: z.string() }),
   make_live: z.object({
-    target: z.string().optional().describe("canvas id or app id; defaults to the current canvas"),
+    target: z.string().optional().describe("canvas id or app id — pass the canvas_id render just returned (without it, whatever canvas is current when this runs)"),
     source: Source.describe(
       "python: code that prints ONE JSON object to stdout (merged into data.json) — or writes data.json itself. http: URL fetched as JSON; json_path picks a sub-object.",
     ),

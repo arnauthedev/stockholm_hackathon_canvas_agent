@@ -39,6 +39,7 @@ export const closeAllVoiceSessions = () => Promise.all([...sessions.values()].ma
 export abstract class VoiceCore implements VoiceSession {
   private transcriptCbs: ((t: Transcript) => void)[] = [];
   private toolCbs: ((c: ToolCall) => void)[] = [];
+  private toolQueue: Promise<void> = Promise.resolve();
   private unregister: (() => void) | null = null;
   // transcript grouping (no final/done transcript events from either provider)
   private cur: { role: "user" | "agent"; text: string } | null = null;
@@ -86,7 +87,9 @@ export abstract class VoiceCore implements VoiceSession {
   /** Common wiring once the provider connection is up. */
   protected attach(models: Record<string, unknown>) {
     this.unregister = registerTarget({ kind: "voice", id: this.id, inject: (t) => this.inject(t) });
-    this.onToolCall((c) => void this.runTool(c));
+    // One at a time, in the order the model asked: a render and the make_live/pin after it in the same
+    // batch must see the new canvas (in parallel, make_live without a target hit the previous one).
+    this.onToolCall((c) => (this.toolQueue = this.toolQueue.then(() => this.runTool(c)).catch(() => {})));
     this.onTranscript((t) => {
       bus.emit({ type: "transcript", role: t.role, text: t.text, final: t.final, session_id: this.id });
       if (t.final) void logSession(this.id, { type: t.role, text: t.text });
@@ -308,6 +311,9 @@ function screenFact(name: string, args: unknown, out: unknown): string | null {
   if (name === "pin") return `Fact: pinned as widget "${String(o.app_id)}" on screen ${String(o.screen)}${o.already_pinned ? " (it was already pinned)" : ""}.`;
   if (name === "unpin") return `Fact: widget "${String(a.app_id)}" removed.`;
   if (name === "notify") return `Fact: a toast saying "${String(a.text)}" was shown.`;
+  if (name === "make_live") return `Fact: ${String(o.target)} is now live (${String(o.note ?? "updating")}). Only that canvas or widget updates itself.`;
+  // data lookups draw nothing: the model sometimes said "it's on your screen" right after one
+  if (name === "weather" || name === "fetch_json" || name === "run_python") return `Fact: this is data only; nothing new is on the user's screen until you render it.`;
   // widget contents: the voice model must speak from the real list, never invent items
   if (name === "read_widget" || name === "ui_action") {
     const ws = (name === "read_widget" ? (o.widgets as { type: string; state: unknown }[] | undefined) ?? [] : [{ type: "", state: o.state }]).filter((w) => w.state);
